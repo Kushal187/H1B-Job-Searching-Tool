@@ -133,6 +133,19 @@ SENIOR_PATTERNS: list[re.Pattern] = [
     re.compile(r"\bgroup\s+product\s+manager", re.IGNORECASE), # Group PM is senior
 ]
 
+# ── Entry-level signal patterns (compiled once at module level) ───────────────
+# Strong signals override seniority keywords; weak signals do not.
+
+STRONG_ENTRY_PATTERN: re.Pattern = re.compile(
+    r"new\s*grad|entry[\s\-]?level|\bjunior\b",
+    re.IGNORECASE,
+)
+
+WEAK_ENTRY_PATTERN: re.Pattern = re.compile(
+    r"\bassociate\b|\b[I1]\b(?!\s*[-–])|level\s*1|\bL1\b|\bE1\b",
+    re.IGNORECASE,
+)
+
 
 def is_target_role(title: str) -> bool:
     """Return True if *title* is an entry-level / new-grad tech role.
@@ -157,11 +170,7 @@ def is_target_role(title: str) -> bool:
 
     # Step 2 — strong entry-level signals override seniority
     # "New Grad", "Entry Level", "Junior" are unambiguous — always pass
-    strong_entry = re.compile(
-        r"new\s*grad|entry[\s\-]?level|\bjunior\b",
-        re.IGNORECASE,
-    )
-    if strong_entry.search(title):
+    if STRONG_ENTRY_PATTERN.search(title):
         return True
 
     # Step 3 — reject senior-level titles
@@ -170,11 +179,7 @@ def is_target_role(title: str) -> bool:
 
     # Step 4 — weak entry-level signals pass only if NOT senior
     # "Associate", level "I"/"1", "L1" etc.
-    weak_entry = re.compile(
-        r"\bassociate\b|\b[I1]\b(?!\s*[-–])|level\s*1|\bL1\b|\bE1\b",
-        re.IGNORECASE,
-    )
-    if weak_entry.search(title):
+    if WEAK_ENTRY_PATTERN.search(title):
         return True
 
     # No seniority indicator → likely entry / mid-level → keep it

@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin - H1B Job Search</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .toast { animation: slideIn 0.3s ease-out, fadeOut 0.3s ease-in 3.7s forwards; }
+    @keyframes slideIn { from { transform: translateY(-12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes fadeOut { to { opacity: 0; } }
+    .spinner { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .progress-bar { transition: width 0.3s ease; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen">
+
+  <!-- Nav -->
+  <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+    <a href="/" class="text-lg font-semibold text-gray-900 hover:text-gray-700">H1B Job Search</a>
+    <div class="flex gap-6 text-sm">
+      <a href="/" class="text-gray-500 hover:text-gray-700">Jobs</a>
+      <a href="/companies" class="text-gray-500 hover:text-gray-700">Companies</a>
+      <a href="/admin" class="text-gray-900 font-medium border-b-2 border-gray-900 pb-0.5">Admin</a>
+    </div>
+  </nav>
+
+  <!-- Toast container -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+  <!-- Page -->
+  <div class="max-w-6xl mx-auto px-6 py-8">
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+        <p class="text-sm text-gray-500 mt-1">Manage scraping, cleanup, and database operations</p>
+      </div>
+      <button onclick="loadAllStats()" class="text-xs text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors">
+        Refresh Stats
+      </button>
+    </div>
+
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8" id="stats-grid">
+      <div class="bg-white rounded-xl border border-gray-200 p-4">
+        <div class="text-2xl font-bold text-gray-900" id="stat-active-jobs">--</div>
+        <div class="text-xs text-gray-500 mt-1">Active Jobs</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4">
+        <div class="text-2xl font-bold text-gray-900" id="stat-inactive-jobs">--</div>
+        <div class="text-xs text-gray-500 mt-1">Inactive Jobs</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4">
+        <div class="text-2xl font-bold text-gray-900" id="stat-companies">--</div>
+        <div class="text-xs text-gray-500 mt-1">Companies w/ Jobs</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4">
+        <div class="text-2xl font-bold text-gray-900" id="stat-matched">--</div>
+        <div class="text-xs text-gray-500 mt-1">Matched Companies</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4">
+        <div class="text-2xl font-bold text-gray-900" id="stat-ats-found">--</div>
+        <div class="text-xs text-gray-500 mt-1">ATS Discovered</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4">
+        <div class="text-2xl font-bold text-gray-900" id="stat-db-size">--</div>
+        <div class="text-xs text-gray-500 mt-1">DB Size (MB)</div>
+      </div>
+    </div>
+
+    <!-- ATS Breakdown + Age Distribution -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <!-- ATS Breakdown -->
+      <div class="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 class="text-sm font-semibold text-gray-900 mb-4">ATS Breakdown (Active Jobs)</h3>
+        <div id="ats-breakdown" class="space-y-3">
+          <div class="text-xs text-gray-400">Loading...</div>
+        </div>
+      </div>
+      <!-- Age Distribution -->
+      <div class="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 class="text-sm font-semibold text-gray-900 mb-4">Job Age Distribution (Active)</h3>
+        <div id="age-distribution" class="space-y-3">
+          <div class="text-xs text-gray-400">Loading...</div>
+        </div>
+        <div class="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-500">
+          <span id="stat-last-scrape">Last scrape: --</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Cards -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      <!-- Scrape Jobs -->
+      <div class="bg-white rounded-xl border border-gray-200 p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-gray-900">Scrape Jobs</h3>
+            <p class="text-xs text-gray-500">Trigger job scraping from ATS platforms</p>
+          </div>
+        </div>
+
+        <div class="space-y-3 mb-4">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-gray-600 block mb-1">Mode</label>
+              <select id="scrape-mode" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400">
+                <option value="monitor">Monitor (known ATS)</option>
+                <option value="discovery">Discovery (all companies)</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-gray-600 block mb-1">Workers</label>
+              <select id="scrape-workers" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400">
+                <option value="1">1 (sequential)</option>
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="15">15</option>
+                <option value="20">20</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-gray-600 block mb-1">ATS Filter <span class="text-gray-400">(optional)</span></label>
+              <select id="scrape-ats" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400">
+                <option value="">All</option>
+                <option value="greenhouse">Greenhouse</option>
+                <option value="lever">Lever</option>
+                <option value="ashby">Ashby</option>
+                <option value="greenhouse,lever">Greenhouse + Lever</option>
+                <option value="greenhouse,ashby">Greenhouse + Ashby</option>
+                <option value="lever,ashby">Lever + Ashby</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-gray-600 block mb-1">Limit <span class="text-gray-400">(optional)</span></label>
+              <input id="scrape-limit" type="number" placeholder="No limit" min="1"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+            </div>
+          </div>
+          <!-- Auto-cleanup after scrape -->
+          <div class="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
+            <input type="checkbox" id="scrape-cleanup" checked
+              class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
+            <label for="scrape-cleanup" class="text-xs text-gray-700">
+              Auto-remove jobs older than
+            </label>
+            <select id="scrape-cleanup-days" class="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400">
+              <option value="14">14 days</option>
+              <option value="30" selected>30 days</option>
+              <option value="60">60 days</option>
+              <option value="90">90 days</option>
+            </select>
+            <span class="text-xs text-gray-500">after scraping</span>
+          </div>
+        </div>
+
+        <!-- Scrape progress -->
+        <div id="scrape-progress" class="hidden mb-4">
+          <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+            <span id="scrape-progress-label">Scraping...</span>
+            <span id="scrape-progress-pct">0%</span>
+          </div>
+          <div class="w-full bg-gray-100 rounded-full h-2">
+            <div id="scrape-progress-bar" class="bg-blue-600 h-2 rounded-full progress-bar" style="width: 0%"></div>
+          </div>
+          <div id="scrape-stats-live" class="mt-2 text-xs text-gray-500"></div>
+        </div>
+
+        <button id="scrape-btn" onclick="startScrape()"
+          class="w-full bg-blue-600 text-white text-sm font-medium rounded-lg px-4 py-2.5 hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          Start Scraping
+        </button>
+
+        <!-- Scrape log -->
+        <div id="scrape-log-container" class="hidden mt-4">
+          <button onclick="toggleLog()" class="text-xs text-gray-500 hover:text-gray-700">
+            Show/Hide Log
+          </button>
+          <div id="scrape-log" class="hidden mt-2 max-h-48 overflow-y-auto bg-gray-50 rounded-lg p-3 text-xs font-mono text-gray-600 space-y-0.5"></div>
+        </div>
+      </div>
+
+      <!-- Cleanup Actions -->
+      <div class="bg-white rounded-xl border border-gray-200 p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-gray-900">Cleanup & Maintenance</h3>
+            <p class="text-xs text-gray-500">Manage job lifecycle and clean up stale data</p>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <!-- Deactivate stale jobs -->
+          <div class="border border-gray-100 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-2">
+              <div>
+                <h4 class="text-sm font-medium text-gray-900">Deactivate Stale Jobs</h4>
+                <p class="text-xs text-gray-500">Mark jobs not seen recently as inactive (reversible)</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500">Not seen in</span>
+              <select id="stale-days" class="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-amber-400">
+                <option value="3">3 days</option>
+                <option value="7" selected>7 days</option>
+                <option value="14">14 days</option>
+                <option value="30">30 days</option>
+              </select>
+              <button onclick="deactivateStale()" class="ml-auto bg-amber-600 text-white text-xs font-medium rounded-lg px-4 py-2 hover:bg-amber-700 transition-colors">
+                Deactivate
+              </button>
+            </div>
+          </div>
+
+          <!-- Purge inactive -->
+          <div class="border border-gray-100 rounded-lg p-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4 class="text-sm font-medium text-gray-900">Purge Inactive Jobs</h4>
+                <p class="text-xs text-gray-500">Permanently delete all inactive jobs</p>
+              </div>
+              <button onclick="purgeInactive()" class="bg-red-600 text-white text-xs font-medium rounded-lg px-4 py-2 hover:bg-red-700 transition-colors">
+                Purge
+              </button>
+            </div>
+          </div>
+
+          <!-- Reactivate all -->
+          <div class="border border-gray-100 rounded-lg p-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4 class="text-sm font-medium text-gray-900">Reactivate All Jobs</h4>
+                <p class="text-xs text-gray-500">Mark all inactive jobs as active again</p>
+              </div>
+              <button onclick="reactivateAll()" class="bg-green-600 text-white text-xs font-medium rounded-lg px-4 py-2 hover:bg-green-700 transition-colors">
+                Reactivate
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Export -->
+      <div class="bg-white rounded-xl border border-gray-200 p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-gray-900">Export Data</h3>
+            <p class="text-xs text-gray-500">Generate CSV and JSON report files</p>
+          </div>
+        </div>
+        <p class="text-xs text-gray-500 mb-4">
+          Exports matched companies, companies with jobs, new jobs (last 7 days), and a summary report to the <code class="bg-gray-100 px-1 rounded">output/</code> directory.
+        </p>
+        <button onclick="exportData()" class="w-full bg-green-600 text-white text-sm font-medium rounded-lg px-4 py-2.5 hover:bg-green-700 transition-colors">
+          Export Reports
+        </button>
+      </div>
+
+      <!-- Database -->
+      <div class="bg-white rounded-xl border border-gray-200 p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-gray-900">Database Operations</h3>
+            <p class="text-xs text-gray-500">Optimize and maintain the SQLite database</p>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <div class="border border-gray-100 rounded-lg p-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4 class="text-sm font-medium text-gray-900">Vacuum Database</h4>
+                <p class="text-xs text-gray-500">Reclaim disk space after deletions</p>
+              </div>
+              <button onclick="vacuumDb()" class="bg-purple-600 text-white text-xs font-medium rounded-lg px-4 py-2 hover:bg-purple-700 transition-colors">
+                Vacuum
+              </button>
+            </div>
+          </div>
+
+          <div class="border border-gray-100 rounded-lg p-4">
+            <h4 class="text-sm font-medium text-gray-900 mb-2">Database Info</h4>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="text-gray-500">Total jobs (all):</div>
+              <div class="font-medium text-gray-900" id="stat-total-all">--</div>
+              <div class="text-gray-500">SEC companies:</div>
+              <div class="font-medium text-gray-900" id="stat-sec">--</div>
+              <div class="text-gray-500">H1B sponsors:</div>
+              <div class="font-medium text-gray-900" id="stat-h1b">--</div>
+              <div class="text-gray-500">ATS checked:</div>
+              <div class="font-medium text-gray-900" id="stat-ats-checked">--</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+  // ── Toast notifications ──────────────────────────────────────────────────
+  function toast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    const colors = {
+      success: 'bg-green-600',
+      error: 'bg-red-600',
+      info: 'bg-blue-600',
+      warning: 'bg-amber-600',
+    };
+    const div = document.createElement('div');
+    div.className = `toast ${colors[type] || colors.info} text-white text-sm px-4 py-3 rounded-lg shadow-lg max-w-sm`;
+    div.textContent = message;
+    container.appendChild(div);
+    setTimeout(() => div.remove(), 4000);
+  }
+
+  // ── API helpers ──────────────────────────────────────────────────────────
+  async function apiPost(url, body = {}) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
+  async function apiGet(url) {
+    const res = await fetch(url);
+    return res.json();
+  }
+
+  // ── Stats loading ────────────────────────────────────────────────────────
+  async function loadAllStats() {
+    try {
+      const s = await apiGet('/api/admin/stats');
+      if (s.error) { toast(s.error, 'error'); return; }
+
+      document.getElementById('stat-active-jobs').textContent = (s.active_jobs || 0).toLocaleString();
+      document.getElementById('stat-inactive-jobs').textContent = (s.inactive_jobs || 0).toLocaleString();
+      document.getElementById('stat-companies').textContent = (s.active_companies || 0).toLocaleString();
+      document.getElementById('stat-matched').textContent = (s.matched_companies || 0).toLocaleString();
+      document.getElementById('stat-ats-found').textContent = (s.ats_found || 0).toLocaleString();
+      document.getElementById('stat-db-size').textContent = s.db_size_mb || '--';
+      document.getElementById('stat-total-all').textContent = (s.total_jobs_all || 0).toLocaleString();
+      document.getElementById('stat-sec').textContent = (s.sec_companies || 0).toLocaleString();
+      document.getElementById('stat-h1b').textContent = (s.h1b_sponsors || 0).toLocaleString();
+      document.getElementById('stat-ats-checked').textContent = (s.ats_checked || 0).toLocaleString();
+
+      // ATS breakdown
+      const atsDiv = document.getElementById('ats-breakdown');
+      if (s.ats_breakdown && s.ats_breakdown.length > 0) {
+        const maxJobs = Math.max(...s.ats_breakdown.map(a => a.job_count));
+        atsDiv.innerHTML = s.ats_breakdown.map(a => {
+          const pct = maxJobs > 0 ? (a.job_count / maxJobs * 100) : 0;
+          const colors = { greenhouse: 'bg-green-500', lever: 'bg-blue-500', ashby: 'bg-purple-500' };
+          return `
+            <div>
+              <div class="flex items-center justify-between text-xs mb-1">
+                <span class="font-medium text-gray-700 capitalize">${a.ats_system}</span>
+                <span class="text-gray-500">${a.job_count.toLocaleString()} jobs / ${a.company_count} companies</span>
+              </div>
+              <div class="w-full bg-gray-100 rounded-full h-2">
+                <div class="${colors[a.ats_system] || 'bg-gray-400'} h-2 rounded-full" style="width: ${pct}%"></div>
+              </div>
+            </div>`;
+        }).join('');
+      } else {
+        atsDiv.innerHTML = '<div class="text-xs text-gray-400">No active jobs.</div>';
+      }
+
+      // Age distribution
+      const ageDiv = document.getElementById('age-distribution');
+      if (s.age_distribution) {
+        const ad = s.age_distribution;
+        const total = s.active_jobs || 1;
+        const buckets = [
+          { label: 'Last 24h', count: ad.last_1d, color: 'bg-blue-500' },
+          { label: '1 - 7 days', count: ad.days_1_7, color: 'bg-green-500' },
+          { label: '7 - 30 days', count: ad.days_7_30, color: 'bg-amber-500' },
+          { label: '30 - 60 days', count: ad.days_30_60, color: 'bg-orange-500' },
+          { label: '60 - 90 days', count: ad.days_60_90, color: 'bg-red-400' },
+          { label: '90+ days', count: ad.older_90d, color: 'bg-red-600' },
+        ];
+        ageDiv.innerHTML = buckets.map(b => {
+          const pct = total > 0 ? (b.count / total * 100) : 0;
+          return `
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-gray-600 w-28 shrink-0">${b.label}</span>
+              <div class="flex-1 bg-gray-100 rounded-full h-2">
+                <div class="${b.color} h-2 rounded-full" style="width: ${Math.min(pct, 100)}%"></div>
+              </div>
+              <span class="text-xs text-gray-500 w-16 text-right">${b.count.toLocaleString()}</span>
+            </div>`;
+        }).join('');
+      }
+
+      // Last scrape
+      if (s.last_scrape) {
+        const d = new Date(s.last_scrape);
+        document.getElementById('stat-last-scrape').textContent =
+          'Last scrape: ' + d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) +
+          ' at ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      }
+
+    } catch (e) {
+      toast('Failed to load stats: ' + e.message, 'error');
+    }
+  }
+
+  // ── Scrape ───────────────────────────────────────────────────────────────
+  let scrapePolling = null;
+
+  async function startScrape() {
+    const mode = document.getElementById('scrape-mode').value;
+    const workers = parseInt(document.getElementById('scrape-workers').value);
+    const ats = document.getElementById('scrape-ats').value || null;
+    const limitStr = document.getElementById('scrape-limit').value;
+    const limit = limitStr ? parseInt(limitStr) : null;
+    const cleanupEnabled = document.getElementById('scrape-cleanup').checked;
+    const cleanupDays = cleanupEnabled ? parseInt(document.getElementById('scrape-cleanup-days').value) : null;
+
+    const btn = document.getElementById('scrape-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></span>Starting...';
+
+    try {
+      const res = await apiPost('/api/admin/scrape', { mode, workers, ats, limit, cleanup_days: cleanupDays });
+      if (res.error) {
+        toast(res.error, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Start Scraping';
+        return;
+      }
+      toast(res.message, 'info');
+      document.getElementById('scrape-progress').classList.remove('hidden');
+      document.getElementById('scrape-log-container').classList.remove('hidden');
+
+      // Start polling
+      scrapePolling = setInterval(pollScrape, 2000);
+    } catch (e) {
+      toast('Failed to start scrape: ' + e.message, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Start Scraping';
+    }
+  }
+
+  async function pollScrape() {
+    try {
+      const s = await apiGet('/api/admin/scrape/status');
+      const pct = s.total > 0 ? Math.round(s.progress / s.total * 100) : 0;
+
+      document.getElementById('scrape-progress-label').textContent =
+        `Scraping... ${s.progress.toLocaleString()} / ${s.total.toLocaleString()}`;
+      document.getElementById('scrape-progress-pct').textContent = pct + '%';
+      document.getElementById('scrape-progress-bar').style.width = pct + '%';
+
+      // Live stats
+      const st = s.stats || {};
+      document.getElementById('scrape-stats-live').innerHTML =
+        `GH: ${st.greenhouse || 0} | Lever: ${st.lever || 0} | Ashby: ${st.ashby || 0} | ` +
+        `Jobs: ${(st.total_jobs || 0).toLocaleString()} | New: ${st.new_jobs || 0}`;
+
+      // Update log (use textContent to prevent XSS from company names)
+      const logDiv = document.getElementById('scrape-log');
+      if (s.log && s.log.length > 0) {
+        const recent = s.log.slice(-50);
+        logDiv.innerHTML = '';
+        recent.forEach(l => {
+          const div = document.createElement('div');
+          div.textContent = l;
+          logDiv.appendChild(div);
+        });
+        logDiv.scrollTop = logDiv.scrollHeight;
+      }
+
+      if (!s.running) {
+        clearInterval(scrapePolling);
+        scrapePolling = null;
+
+        const btn = document.getElementById('scrape-btn');
+        btn.disabled = false;
+        btn.textContent = 'Start Scraping';
+
+        document.getElementById('scrape-progress-bar').style.width = '100%';
+        document.getElementById('scrape-progress-label').textContent = 'Scrape complete!';
+        document.getElementById('scrape-progress-pct').textContent = '100%';
+
+        if (s.error) {
+          toast('Scrape failed: ' + s.error, 'error');
+        } else {
+          let msg = `Scrape complete! ${(st.total_jobs || 0).toLocaleString()} jobs found, ${st.new_jobs || 0} new.`;
+          if (st.cleaned_up) msg += ` Cleaned up ${st.cleaned_up} old jobs.`;
+          toast(msg, 'success');
+        }
+
+        loadAllStats();
+      }
+    } catch (e) {
+      // Polling error, keep trying
+    }
+  }
+
+  function toggleLog() {
+    document.getElementById('scrape-log').classList.toggle('hidden');
+  }
+
+  // ── Cleanup actions ──────────────────────────────────────────────────────
+  async function deactivateStale() {
+    const days = parseInt(document.getElementById('stale-days').value);
+    if (!confirm(`Deactivate jobs not seen in the last ${days} days?`)) return;
+
+    try {
+      const res = await apiPost('/api/admin/deactivate-stale', { days });
+      if (res.error) { toast(res.error, 'error'); return; }
+      toast(res.message, 'success');
+      loadAllStats();
+    } catch (e) {
+      toast('Failed: ' + e.message, 'error');
+    }
+  }
+
+  async function purgeInactive() {
+    if (!confirm('Permanently delete ALL inactive jobs? This cannot be undone.')) return;
+
+    try {
+      const res = await apiPost('/api/admin/cleanup/inactive');
+      if (res.error) { toast(res.error, 'error'); return; }
+      toast(res.message, 'success');
+      loadAllStats();
+    } catch (e) {
+      toast('Failed: ' + e.message, 'error');
+    }
+  }
+
+  async function reactivateAll() {
+    if (!confirm('Reactivate all inactive jobs?')) return;
+
+    try {
+      const res = await apiPost('/api/admin/reactivate-all');
+      if (res.error) { toast(res.error, 'error'); return; }
+      toast(res.message, 'success');
+      loadAllStats();
+    } catch (e) {
+      toast('Failed: ' + e.message, 'error');
+    }
+  }
+
+  // ── Export ───────────────────────────────────────────────────────────────
+  async function exportData() {
+    try {
+      toast('Exporting data...', 'info');
+      const res = await apiPost('/api/admin/export');
+      if (res.error) { toast(res.error, 'error'); return; }
+      toast(res.message, 'success');
+    } catch (e) {
+      toast('Failed: ' + e.message, 'error');
+    }
+  }
+
+  // ── Vacuum ───────────────────────────────────────────────────────────────
+  async function vacuumDb() {
+    try {
+      toast('Vacuuming database...', 'info');
+      const res = await apiPost('/api/admin/vacuum');
+      if (res.error) { toast(res.error, 'error'); return; }
+      toast(res.message, 'success');
+      loadAllStats();
+    } catch (e) {
+      toast('Failed: ' + e.message, 'error');
+    }
+  }
+
+  // ── Check if scrape is already running on page load ──────────────────────
+  async function checkActiveScrape() {
+    try {
+      const s = await apiGet('/api/admin/scrape/status');
+      if (s.running) {
+        const btn = document.getElementById('scrape-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></span>Scraping...';
+        document.getElementById('scrape-progress').classList.remove('hidden');
+        document.getElementById('scrape-log-container').classList.remove('hidden');
+        scrapePolling = setInterval(pollScrape, 2000);
+      }
+    } catch {}
+  }
+
+  // ── Init ─────────────────────────────────────────────────────────────────
+  loadAllStats();
+  checkActiveScrape();
+</script>
+
+</body>
+</html>

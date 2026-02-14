@@ -185,13 +185,18 @@ def _fuzzy_match_names(
 def build_matched_companies():
     """Build the matched_companies table by cross-referencing SEC and H1B data.
 
+    Uses upsert (INSERT ... ON CONFLICT DO UPDATE) keyed on normalized_name
+    to preserve existing row IDs.  This keeps foreign-key references in
+    job_listings and company_ats_status intact across re-runs.
+
     1. Exact-match on normalized names
     2. Fuzzy-match remaining names with threshold (prefix-bucketed)
     3. Tag source as 'both', 'sec_only', or 'h1b_only'
-    4. Store in matched_companies table
+    4. Upsert into matched_companies table (preserving IDs)
     """
     database.init_db()
-    database.clear_table("matched_companies")
+    # NOTE: we do NOT clear_table — upsert preserves existing row IDs so
+    # that foreign keys in job_listings / company_ats_status remain valid.
 
     print("Building matched company list...")
 
@@ -261,9 +266,9 @@ def build_matched_companies():
             })
             seen_normalized.add(name)
 
-    # Insert into database
+    # Upsert into database (preserves existing IDs)
     if records:
-        database.insert_many("matched_companies", records)
+        _upsert_matched_companies(records)
 
     both_count = sum(1 for r in records if r["source"] == "both")
     sec_only = sum(1 for r in records if r["source"] == "sec_only")
@@ -276,3 +281,31 @@ def build_matched_companies():
     print(f"  Total:          {len(records)}")
 
     return len(records)
+
+
+def _upsert_matched_companies(records: list[dict]):
+    """Upsert matched companies, preserving existing row IDs.
+
+    Uses ON CONFLICT(normalized_name) so that companies already in the table
+    keep their primary key, and foreign-key references from job_listings and
+    company_ats_status remain intact.
+    """
+    sql = """
+        INSERT INTO matched_companies
+            (company_name, normalized_name, source,
+             h1b_approval_count, sec_amount_raised, priority_score)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(normalized_name) DO UPDATE SET
+            company_name = excluded.company_name,
+            source = excluded.source,
+            h1b_approval_count = excluded.h1b_approval_count,
+            sec_amount_raised = excluded.sec_amount_raised,
+            priority_score = excluded.priority_score
+    """
+    values = [
+        (r["company_name"], r["normalized_name"], r["source"],
+         r["h1b_approval_count"], r["sec_amount_raised"], r["priority_score"])
+        for r in records
+    ]
+    with database.get_db() as conn:
+        conn.executemany(sql, values)

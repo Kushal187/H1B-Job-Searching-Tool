@@ -89,14 +89,27 @@ def cmd_match(args):
 # ─── Phase 3: Job Scraping ───────────────────────────────────────────────────
 
 
-def _scrape_one_company(company: dict, gh_dir: str, lever_dir: str) -> dict:
-    """Scrape a single company (Greenhouse then Lever). Thread-safe.
+def _scrape_one_company(
+    company: dict,
+    gh_dir: str,
+    lever_dir: str,
+    ashby_dir: str,
+    ats_filter: set[str] | None = None,
+) -> dict:
+    """Scrape a single company on the requested ATS platforms. Thread-safe.
+
+    Args:
+        company: Row from matched_companies.
+        gh_dir / lever_dir / ashby_dir: Output directories.
+        ats_filter: If set, only try these ATS systems (e.g. {"ashby"}).
+                    None means try all.
 
     Returns a result dict with keys:
       name, normalized, ats, job_count, new_job_count, status
     """
     from scrapers.greenhouse import scrape_greenhouse
     from scrapers.lever import scrape_lever
+    from scrapers.ashby import scrape_ashby
 
     name = company["company_name"]
     norm = company["normalized_name"]
@@ -113,35 +126,50 @@ def _scrape_one_company(company: dict, gh_dir: str, lever_dir: str) -> dict:
         "status": "not_found",
     }
 
-    # Try Greenhouse first
-    gh = scrape_greenhouse(name, norm, gh_dir, company_id=cid)
-    if gh is not None:
-        result["ats"] = "greenhouse"
-        result["job_count"] = gh.get("job_count", 0)
-        result["new_job_count"] = gh.get("new_job_count", 0)
-        result["total_before_filter"] = gh.get("total_before_filter", 0)
-        result["status"] = "found" if gh.get("job_count", 0) > 0 else "ats_no_match"
-        return result
+    def _fill(result, ats_name, data):
+        result["ats"] = ats_name
+        result["job_count"] = data.get("job_count", 0)
+        result["new_job_count"] = data.get("new_job_count", 0)
+        result["total_before_filter"] = data.get("total_before_filter", 0)
+        result["status"] = "found" if data.get("job_count", 0) > 0 else "ats_no_match"
 
-    # Then try Lever
-    lv = scrape_lever(name, norm, lever_dir, company_id=cid)
-    if lv is not None:
-        result["ats"] = "lever"
-        result["job_count"] = lv.get("job_count", 0)
-        result["new_job_count"] = lv.get("new_job_count", 0)
-        result["total_before_filter"] = lv.get("total_before_filter", 0)
-        result["status"] = "found" if lv.get("job_count", 0) > 0 else "ats_no_match"
-        return result
+    # Try Greenhouse
+    if ats_filter is None or "greenhouse" in ats_filter:
+        gh = scrape_greenhouse(name, norm, gh_dir, company_id=cid)
+        if gh is not None:
+            _fill(result, "greenhouse", gh)
+            return result
+
+    # Try Lever
+    if ats_filter is None or "lever" in ats_filter:
+        lv = scrape_lever(name, norm, lever_dir, company_id=cid)
+        if lv is not None:
+            _fill(result, "lever", lv)
+            return result
+
+    # Try Ashby
+    if ats_filter is None or "ashby" in ats_filter:
+        ash = scrape_ashby(name, norm, ashby_dir, company_id=cid)
+        if ash is not None:
+            _fill(result, "ashby", ash)
+            return result
 
     return result
 
 
-def _update_ats_status(result: dict):
-    """Cache the ATS status for a company in company_ats_status table."""
+def _update_ats_status(result: dict, ats_filter: set[str] | None = None):
+    """Cache the ATS status for a company in company_ats_status table.
+
+    When *ats_filter* is set and the result is "not_found", we only update
+    the status if the company does NOT already have a known ATS that wasn't
+    in our filter.  This avoids overwriting ``has_jobs`` for Greenhouse/Lever
+    companies when we only checked Ashby.
+    """
     now = datetime.now(timezone.utc).isoformat()
     has_jobs = 1 if result["job_count"] > 0 else 0
 
     if result["ats"]:
+        # Found on an ATS — always update (new discovery or refresh)
         database.execute(
             """INSERT INTO company_ats_status (company_id, normalized_name, ats_system, last_checked, has_jobs)
                VALUES (?, ?, ?, ?, ?)
@@ -152,6 +180,19 @@ def _update_ats_status(result: dict):
             (result["company_id"], result["normalized"], result["ats"], now, has_jobs),
         )
     else:
+        # Not found on the checked ATS systems.
+        # If we only checked a subset (e.g. --ats ashby) and the company is
+        # already known on a different ATS, skip the update to avoid
+        # overwriting has_jobs / ats_system with NULL / 0.
+        if ats_filter:
+            existing = database.query(
+                "SELECT ats_system FROM company_ats_status WHERE normalized_name = ?",
+                (result["normalized"],),
+            )
+            if existing and existing[0]["ats_system"] and existing[0]["ats_system"] not in ats_filter:
+                # Company already has a known ATS outside our filter — don't touch it
+                return
+
         database.execute(
             """INSERT INTO company_ats_status (company_id, normalized_name, ats_system, last_checked, has_jobs)
                VALUES (?, ?, NULL, ?, 0)
@@ -163,21 +204,30 @@ def _update_ats_status(result: dict):
 
 
 def cmd_scrape(args):
-    """Scrape Greenhouse and Lever for open jobs at matched companies."""
+    """Scrape Greenhouse, Lever, and Ashby for open jobs at matched companies."""
     mode = getattr(args, "mode", "monitor")
     workers = getattr(args, "workers", 1)
     limit = getattr(args, "limit", None)
+    ats_raw = getattr(args, "ats", None)
 
+    # Parse --ats filter (e.g. "ashby" or "greenhouse,lever")
+    ats_filter = None
+    if ats_raw:
+        ats_filter = {a.strip().lower() for a in ats_raw.split(",")}
+        valid = {"greenhouse", "lever", "ashby"}
+        unknown = ats_filter - valid
+        if unknown:
+            print(f"Unknown ATS systems: {unknown}. Valid: {valid}")
+            return
+
+    ats_label = ",".join(sorted(ats_filter)) if ats_filter else "all"
     print("=" * 60)
-    print(f"PHASE 3: Job Scraping (mode={mode}, workers={workers})")
+    print(f"PHASE 3: Job Scraping (mode={mode}, ats={ats_label}, workers={workers})")
     print("=" * 60)
 
     database.init_db()
 
     # Do NOT clear job_listings — we use upsert to preserve history
-
-    from scrapers.greenhouse import scrape_greenhouse
-    from scrapers.lever import scrape_lever
 
     if mode == "discovery":
         # Scrape ALL companies (or up to --limit)
@@ -192,17 +242,22 @@ def cmd_scrape(args):
         companies = database.query(sql, params)
 
     elif mode == "monitor":
-        # Only scrape companies previously found on Greenhouse or Lever
+        # Only scrape companies previously found on an ATS
+        ats_where = ""
+        if ats_filter:
+            placeholders = ",".join(["?"] * len(ats_filter))
+            ats_where = f"AND cas.ats_system IN ({placeholders})"
         companies = database.query(
-            """SELECT mc.id, mc.company_name, mc.normalized_name, mc.priority_score
+            f"""SELECT mc.id, mc.company_name, mc.normalized_name, mc.priority_score
                FROM matched_companies mc
                INNER JOIN company_ats_status cas ON cas.normalized_name = mc.normalized_name
-               WHERE cas.ats_system IS NOT NULL
+               WHERE cas.ats_system IS NOT NULL {ats_where}
                ORDER BY mc.priority_score DESC""",
+            tuple(ats_filter) if ats_filter else (),
         )
         if not companies:
             print("\nNo companies with known ATS found.")
-            print("Run with --mode discovery first to identify which companies use Greenhouse/Lever.")
+            print("Run with --mode discovery first to identify which companies use an ATS.")
             return
 
     else:
@@ -218,11 +273,13 @@ def cmd_scrape(args):
 
     os.makedirs(config.GREENHOUSE_DIR, exist_ok=True)
     os.makedirs(config.LEVER_DIR, exist_ok=True)
+    os.makedirs(config.ASHBY_DIR, exist_ok=True)
 
     # Counters
     stats = {
         "greenhouse": 0,
         "lever": 0,
+        "ashby": 0,
         "ats_no_match": 0,  # company uses ATS but no matching jobs
         "not_found": 0,
         "total_jobs": 0,
@@ -235,9 +292,10 @@ def cmd_scrape(args):
         # Sequential scraping
         for i, company in enumerate(companies):
             result = _scrape_one_company(
-                company, config.GREENHOUSE_DIR, config.LEVER_DIR,
+                company, config.GREENHOUSE_DIR, config.LEVER_DIR, config.ASHBY_DIR,
+                ats_filter=ats_filter,
             )
-            _update_ats_status(result)
+            _update_ats_status(result, ats_filter=ats_filter)
             _print_progress(i + 1, total, result, start_time)
             _tally_stats(stats, result)
     else:
@@ -246,7 +304,9 @@ def cmd_scrape(args):
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {
                 executor.submit(
-                    _scrape_one_company, company, config.GREENHOUSE_DIR, config.LEVER_DIR,
+                    _scrape_one_company, company,
+                    config.GREENHOUSE_DIR, config.LEVER_DIR, config.ASHBY_DIR,
+                    ats_filter,
                 ): company
                 for company in companies
             }
@@ -255,7 +315,7 @@ def cmd_scrape(args):
                 completed += 1
                 try:
                     result = future.result()
-                    _update_ats_status(result)
+                    _update_ats_status(result, ats_filter=ats_filter)
                     _print_progress(completed, total, result, start_time)
                     _tally_stats(stats, result)
                 except Exception as e:
@@ -301,10 +361,13 @@ def _print_progress(i: int, total: int, result: dict, start_time: float):
 def _tally_stats(stats: dict, result: dict):
     """Accumulate scraping statistics."""
     if result["status"] == "found":
-        if result["ats"] == "greenhouse":
+        ats = result["ats"]
+        if ats == "greenhouse":
             stats["greenhouse"] += 1
-        else:
+        elif ats == "lever":
             stats["lever"] += 1
+        elif ats == "ashby":
+            stats["ashby"] += 1
         stats["total_jobs"] += result["job_count"]
         stats["new_jobs"] += result.get("new_job_count", 0)
     elif result["status"] == "ats_no_match":
@@ -318,15 +381,16 @@ def _print_summary(stats: dict, total: int, elapsed: float):
     minutes = int(elapsed // 60)
     seconds = int(elapsed % 60)
 
-    found = stats["greenhouse"] + stats["lever"]
+    found = stats["greenhouse"] + stats["lever"] + stats["ashby"]
     print(f"\n{'=' * 60}")
     print(f"Scraping complete in {minutes}m {seconds}s")
     print(f"{'=' * 60}")
     print(f"  Companies scraped:   {total:,}")
     print(f"  Greenhouse matches:  {stats['greenhouse']:,}")
     print(f"  Lever matches:       {stats['lever']:,}")
+    print(f"  Ashby matches:       {stats['ashby']:,}")
     print(f"  ATS found, 0 match:  {stats['ats_no_match']:,}")
-    print(f"  Not on either ATS:   {stats['not_found']:,}")
+    print(f"  Not on any ATS:      {stats['not_found']:,}")
     print(f"  Match rate:          {found / total * 100:.1f}%" if total > 0 else "  N/A")
     print(f"  Total matching jobs: {stats['total_jobs']:,}")
     print(f"  New jobs this run:   {stats['new_jobs']:,}")
@@ -562,6 +626,8 @@ Examples:
   python pipeline.py match                           Match companies and compute priority scores
   python pipeline.py scrape --mode discovery -w 10   First run: discover ATS for ALL companies
   python pipeline.py scrape --mode monitor           Daily run: re-check known ATS companies
+  python pipeline.py scrape --mode discovery --ats ashby -w 15   Discover Ashby boards only
+  python pipeline.py scrape --mode monitor --ats greenhouse,lever   Monitor Greenhouse + Lever only
   python pipeline.py scrape --mode discovery --limit 5000 -w 10   Discovery with limit
   python pipeline.py export                          Export results to CSV/JSON
   python pipeline.py run-all --mode monitor          Run full pipeline with monitoring scrape
@@ -592,6 +658,10 @@ Examples:
         "-w", "--workers", type=int, default=1,
         help="Number of concurrent workers (default: 1; recommended: 10 for discovery)",
     )
+    sub_scrape.add_argument(
+        "--ats", type=str, default=None,
+        help="Comma-separated ATS systems to check (greenhouse,lever,ashby). Default: all",
+    )
     sub_scrape.set_defaults(func=cmd_scrape)
 
     # export
@@ -611,6 +681,10 @@ Examples:
     sub_all.add_argument(
         "-w", "--workers", type=int, default=1,
         help="Number of concurrent workers",
+    )
+    sub_all.add_argument(
+        "--ats", type=str, default=None,
+        help="Comma-separated ATS systems to check (greenhouse,lever,ashby). Default: all",
     )
     sub_all.set_defaults(func=cmd_run_all)
 

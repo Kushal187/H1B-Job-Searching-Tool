@@ -14,6 +14,7 @@ def get_connection() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout=10000")  # wait up to 10s for write locks
     return conn
 
 
@@ -54,6 +55,19 @@ def _migrate():
         # Add posted_at — the date the company originally published the job
         "ALTER TABLE job_listings ADD COLUMN posted_at TEXT",
         "CREATE INDEX IF NOT EXISTS idx_jobs_posted_at ON job_listings(posted_at)",
+        # Deduplicate matched_companies before adding unique constraint
+        # (keeps the row with the highest id for each normalized_name)
+        """DELETE FROM matched_companies WHERE id NOT IN (
+            SELECT MAX(id) FROM matched_companies GROUP BY normalized_name
+        )""",
+        # Add unique index on normalized_name to support upsert and prevent duplicates
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_matched_name_unique ON matched_companies(normalized_name)",
+        # Job lifecycle tracking columns
+        "ALTER TABLE job_listings ADD COLUMN last_seen_at TEXT",
+        "ALTER TABLE job_listings ADD COLUMN is_active INTEGER DEFAULT 1",
+        "CREATE INDEX IF NOT EXISTS idx_jobs_is_active ON job_listings(is_active)",
+        # Backfill last_seen_at from scraped_at for existing rows
+        "UPDATE job_listings SET last_seen_at = scraped_at WHERE last_seen_at IS NULL",
     ]
     with get_db() as conn:
         for sql in migrations:
@@ -132,3 +146,12 @@ def execute(sql: str, params: tuple = (), conn: sqlite3.Connection | None = None
 def clear_table(table: str, conn: sqlite3.Connection | None = None):
     """Delete all rows from a table."""
     execute(f"DELETE FROM {table}", conn=conn)
+
+
+def vacuum():
+    """Run VACUUM on the database. Must run outside a transaction."""
+    conn = get_connection()
+    try:
+        conn.execute("VACUUM")
+    finally:
+        conn.close()

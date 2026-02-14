@@ -1,9 +1,10 @@
 """FastAPI web UI for browsing H1B job listings."""
 
-import json
 import os
 import sys
-from urllib.parse import quote, unquote
+import threading
+from datetime import datetime, timezone
+from urllib.parse import unquote
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse
@@ -12,40 +13,42 @@ from fastapi.templating import Jinja2Templates
 # Allow imports from project root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import config
 from db import database
 
 app = FastAPI(title="H1B Job Search")
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
 
 
+@app.on_event("startup")
+def startup_init_db():
+    """Ensure database schema and migrations are applied on startup."""
+    database.init_db()
+
+
+# ── Background task state (for admin scraping) ──────────────────────────────
+
+_scrape_status = {
+    "running": False,
+    "started_at": None,
+    "finished_at": None,
+    "mode": None,
+    "ats": None,
+    "workers": None,
+    "progress": 0,
+    "total": 0,
+    "stats": {},
+    "error": None,
+    "log": [],
+}
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def _extract_posted_date(raw_json: str | None, ats_system: str) -> str | None:
-    """Extract the original posting date from the raw API JSON."""
-    if not raw_json:
-        return None
-    try:
-        data = json.loads(raw_json)
-        if ats_system == "greenhouse":
-            return data.get("updated_at")
-        elif ats_system == "lever":
-            created = data.get("createdAt")
-            if created:
-                from datetime import datetime, timezone
-                dt = datetime.fromtimestamp(created / 1000, tz=timezone.utc)
-                return dt.isoformat()
-    except (json.JSONDecodeError, TypeError, ValueError):
-        pass
-    return None
-
-
-POSTED_DATE_EXPR = """
-    CASE
-        WHEN j.ats_system = 'greenhouse' THEN json_extract(j.raw_json, '$.updated_at')
-        WHEN j.ats_system = 'lever' THEN datetime(json_extract(j.raw_json, '$.createdAt') / 1000, 'unixepoch')
-        ELSE j.first_seen_at
-    END
-"""
+# Use the posted_at column directly (populated by scrapers at insert time),
+# falling back to first_seen_at for older rows that may not have posted_at.
+# This avoids expensive json_extract() on raw_json at query time.
+POSTED_DATE_EXPR = "COALESCE(NULLIF(j.posted_at, ''), j.first_seen_at)"
 
 
 # ── Page Routes ──────────────────────────────────────────────────────────────
@@ -71,6 +74,12 @@ async def page_company_detail(request: Request, company_name: str):
     })
 
 
+@app.get("/admin", response_class=HTMLResponse)
+async def page_admin(request: Request):
+    """Admin dashboard page."""
+    return templates.TemplateResponse("admin.html", {"request": request})
+
+
 # ── API: Stats ───────────────────────────────────────────────────────────────
 
 @app.get("/api/stats")
@@ -79,19 +88,21 @@ async def get_stats():
     try:
         rows = database.query("""
             SELECT
-                (SELECT COUNT(*) FROM job_listings) as total_jobs,
-                (SELECT COUNT(DISTINCT company_name) FROM job_listings) as companies_with_jobs,
-                (SELECT COUNT(*) FROM job_listings WHERE ats_system = 'greenhouse') as greenhouse_jobs,
-                (SELECT COUNT(*) FROM job_listings WHERE ats_system = 'lever') as lever_jobs
+                (SELECT COUNT(*) FROM job_listings WHERE is_active = 1) as total_jobs,
+                (SELECT COUNT(DISTINCT company_name) FROM job_listings WHERE is_active = 1) as companies_with_jobs,
+                (SELECT COUNT(*) FROM job_listings WHERE ats_system = 'greenhouse' AND is_active = 1) as greenhouse_jobs,
+                (SELECT COUNT(*) FROM job_listings WHERE ats_system = 'lever' AND is_active = 1) as lever_jobs,
+                (SELECT COUNT(*) FROM job_listings WHERE ats_system = 'ashby' AND is_active = 1) as ashby_jobs
         """)
         stats = rows[0] if rows else {}
 
-        # Count new jobs (using posted_at column, falling back to POSTED_DATE_EXPR)
+        # Count new jobs (using posted_at column, falling back to first_seen_at)
         new_rows = database.query(f"""
             SELECT
                 COUNT(CASE WHEN {POSTED_DATE_EXPR} >= datetime('now', '-24 hours') THEN 1 END) as new_24h,
                 COUNT(CASE WHEN {POSTED_DATE_EXPR} >= datetime('now', '-48 hours') THEN 1 END) as new_48h
             FROM job_listings j
+            WHERE j.is_active = 1
         """)
         stats["new_24h"] = new_rows[0]["new_24h"] if new_rows else 0
         stats["new_48h"] = new_rows[0]["new_48h"] if new_rows else 0
@@ -106,7 +117,7 @@ async def get_stats():
         stats["total_sponsors"] = sponsor_rows[0]["total_sponsors"] if sponsor_rows else 0
         return stats
     except Exception:
-        return {"total_jobs": 0, "companies_with_jobs": 0, "greenhouse_jobs": 0, "lever_jobs": 0, "total_sponsors": 0, "new_24h": 0, "new_48h": 0}
+        return {"total_jobs": 0, "companies_with_jobs": 0, "greenhouse_jobs": 0, "lever_jobs": 0, "ashby_jobs": 0, "total_sponsors": 0, "new_24h": 0, "new_48h": 0}
 
 
 # ── API: Jobs ────────────────────────────────────────────────────────────────
@@ -116,6 +127,7 @@ async def get_jobs(
     search: str = Query("", description="Search job titles or companies"),
     company: str = Query("", description="Filter by company name"),
     freshness: str = Query("", description="Filter: '24h' or '48h' for recent jobs"),
+    active: str = Query("true", description="Filter active jobs only ('true'/'false'/'all')"),
     sort: str = Query("posted_desc", description="Sort order"),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
@@ -123,6 +135,12 @@ async def get_jobs(
     """Return paginated job listings."""
     conditions = []
     params = []
+
+    # By default only show active jobs; pass active=all to include inactive
+    if active == "true":
+        conditions.append("j.is_active = 1")
+    elif active == "false":
+        conditions.append("j.is_active = 0")
 
     if search:
         conditions.append("(j.job_title LIKE ? OR j.company_name LIKE ?)")
@@ -157,7 +175,8 @@ async def get_jobs(
     sql = f"""
         SELECT
             j.id, j.company_name, j.ats_system, j.job_title,
-            j.job_location, j.job_url, j.department, j.first_seen_at, j.raw_json,
+            j.job_location, j.job_url, j.department, j.first_seen_at,
+            {POSTED_DATE_EXPR} as posted_date,
             COALESCE(m.priority_score, 0) as priority_score,
             COALESCE(m.h1b_approval_count, 0) as h1b_approvals,
             m.source
@@ -172,7 +191,6 @@ async def get_jobs(
 
     jobs = []
     for row in rows:
-        posted_date = _extract_posted_date(row.get("raw_json"), row["ats_system"])
         jobs.append({
             "id": row["id"],
             "company_name": row["company_name"],
@@ -182,7 +200,7 @@ async def get_jobs(
             "job_url": row["job_url"],
             "department": row["department"],
             "first_seen_at": row["first_seen_at"],
-            "posted_date": posted_date,
+            "posted_date": row["posted_date"],
             "priority_score": row["priority_score"],
             "h1b_approvals": row["h1b_approvals"],
             "source": row["source"],
@@ -253,6 +271,7 @@ async def get_companies(
         LEFT JOIN (
             SELECT company_id, COUNT(*) as job_count
             FROM job_listings
+            WHERE is_active = 1
             GROUP BY company_id
         ) jc ON jc.company_id = ts.id
         {where}
@@ -297,19 +316,19 @@ async def get_company_detail(company_name: str):
         (company["normalized_name"],),
     )
 
-    # Job listings
+    # Job listings (active only by default)
     job_rows = database.query(
         """SELECT j.id, j.company_name, j.ats_system, j.job_title,
                   j.job_location, j.job_url, j.department,
-                  j.first_seen_at, j.raw_json
+                  j.first_seen_at, j.is_active,
+                  COALESCE(NULLIF(j.posted_at, ''), j.first_seen_at) as posted_date
            FROM job_listings j
            WHERE j.company_id = ?
-           ORDER BY j.first_seen_at DESC""",
+           ORDER BY j.is_active DESC, j.first_seen_at DESC""",
         (company["id"],),
     )
     jobs = []
     for row in job_rows:
-        posted_date = _extract_posted_date(row.get("raw_json"), row["ats_system"])
         jobs.append({
             "id": row["id"],
             "company_name": row["company_name"],
@@ -319,7 +338,8 @@ async def get_company_detail(company_name: str):
             "job_url": row["job_url"],
             "department": row["department"],
             "first_seen_at": row["first_seen_at"],
-            "posted_date": posted_date,
+            "posted_date": row["posted_date"],
+            "is_active": bool(row["is_active"]),
         })
 
     return {
@@ -327,3 +347,341 @@ async def get_company_detail(company_name: str):
         "h1b": [dict(r) for r in h1b_rows],
         "jobs": jobs,
     }
+
+
+# ── Admin API ────────────────────────────────────────────────────────────────
+
+@app.get("/api/admin/stats")
+async def admin_stats():
+    """Return detailed database statistics for the admin dashboard."""
+    try:
+        rows = database.query("""
+            SELECT
+                (SELECT COUNT(*) FROM job_listings) as total_jobs_all,
+                (SELECT COUNT(*) FROM job_listings WHERE is_active = 1) as active_jobs,
+                (SELECT COUNT(*) FROM job_listings WHERE is_active = 0) as inactive_jobs,
+                (SELECT COUNT(DISTINCT company_name) FROM job_listings) as total_companies_with_jobs,
+                (SELECT COUNT(DISTINCT company_name) FROM job_listings WHERE is_active = 1) as active_companies,
+                (SELECT COUNT(*) FROM matched_companies) as matched_companies,
+                (SELECT COUNT(*) FROM sec_formd_companies) as sec_companies,
+                (SELECT COUNT(*) FROM h1b_sponsors) as h1b_sponsors,
+                (SELECT COUNT(*) FROM company_ats_status) as ats_checked,
+                (SELECT COUNT(*) FROM company_ats_status WHERE ats_system IS NOT NULL) as ats_found
+        """)
+        stats = dict(rows[0]) if rows else {}
+
+        # ATS breakdown
+        ats_rows = database.query("""
+            SELECT ats_system, COUNT(*) as job_count, COUNT(DISTINCT company_name) as company_count
+            FROM job_listings WHERE is_active = 1
+            GROUP BY ats_system
+        """)
+        stats["ats_breakdown"] = [dict(r) for r in ats_rows]
+
+        # Age distribution (exclusive buckets — each job counted in exactly one)
+        age_rows = database.query(f"""
+            SELECT
+                COUNT(CASE WHEN {POSTED_DATE_EXPR} >= datetime('now', '-1 day') THEN 1 END) as last_1d,
+                COUNT(CASE WHEN {POSTED_DATE_EXPR} >= datetime('now', '-7 days')
+                           AND {POSTED_DATE_EXPR} < datetime('now', '-1 day') THEN 1 END) as days_1_7,
+                COUNT(CASE WHEN {POSTED_DATE_EXPR} >= datetime('now', '-30 days')
+                           AND {POSTED_DATE_EXPR} < datetime('now', '-7 days') THEN 1 END) as days_7_30,
+                COUNT(CASE WHEN {POSTED_DATE_EXPR} >= datetime('now', '-60 days')
+                           AND {POSTED_DATE_EXPR} < datetime('now', '-30 days') THEN 1 END) as days_30_60,
+                COUNT(CASE WHEN {POSTED_DATE_EXPR} >= datetime('now', '-90 days')
+                           AND {POSTED_DATE_EXPR} < datetime('now', '-60 days') THEN 1 END) as days_60_90,
+                COUNT(CASE WHEN {POSTED_DATE_EXPR} < datetime('now', '-90 days') THEN 1 END) as older_90d
+            FROM job_listings j WHERE j.is_active = 1
+        """)
+        stats["age_distribution"] = dict(age_rows[0]) if age_rows else {}
+
+        # Database file size
+        if os.path.exists(config.DB_PATH):
+            stats["db_size_mb"] = round(os.path.getsize(config.DB_PATH) / (1024 * 1024), 2)
+        else:
+            stats["db_size_mb"] = 0
+
+        # Last scrape time (most recent last_seen_at)
+        last_scrape = database.query(
+            "SELECT MAX(last_seen_at) as last_scrape FROM job_listings"
+        )
+        stats["last_scrape"] = last_scrape[0]["last_scrape"] if last_scrape else None
+
+        return stats
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/admin/scrape")
+async def admin_scrape(request: Request):
+    """Trigger a background scrape operation."""
+    global _scrape_status
+
+    if _scrape_status["running"]:
+        return {"error": "A scrape is already running", "status": _scrape_status}
+
+    body = await request.json()
+    mode = body.get("mode", "monitor")
+    workers = body.get("workers", 10)
+    ats_raw = body.get("ats", None)
+    limit = body.get("limit", None)
+    cleanup_days = body.get("cleanup_days", None)  # auto-remove old jobs after scrape
+
+    # Validate
+    if mode not in ("discovery", "monitor"):
+        return {"error": f"Invalid mode: {mode}"}
+
+    ats_filter = None
+    if ats_raw:
+        ats_filter = {a.strip().lower() for a in ats_raw.split(",")}
+        valid = {"greenhouse", "lever", "ashby"}
+        unknown = ats_filter - valid
+        if unknown:
+            return {"error": f"Unknown ATS systems: {unknown}"}
+
+    # Reset status
+    _scrape_status = {
+        "running": True,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "finished_at": None,
+        "mode": mode,
+        "ats": ats_raw,
+        "workers": workers,
+        "progress": 0,
+        "total": 0,
+        "stats": {"greenhouse": 0, "lever": 0, "ashby": 0, "not_found": 0, "total_jobs": 0, "new_jobs": 0},
+        "error": None,
+        "log": [],
+    }
+
+    def _run_scrape():
+        try:
+            _do_background_scrape(mode, workers, ats_filter, limit, cleanup_days)
+        except Exception as e:
+            _scrape_status["error"] = str(e)
+        finally:
+            _scrape_status["running"] = False
+            _scrape_status["finished_at"] = datetime.now(timezone.utc).isoformat()
+
+    thread = threading.Thread(target=_run_scrape, daemon=True)
+    thread.start()
+
+    return {"ok": True, "message": f"Scrape started ({mode}, workers={workers})"}
+
+
+def _do_background_scrape(mode: str, workers: int, ats_filter: set | None, limit: int | None, cleanup_days: int | None = None):
+    """Run the scrape in a background thread, updating _scrape_status."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from scrapers.greenhouse import scrape_greenhouse
+    from scrapers.lever import scrape_lever
+    from scrapers.ashby import scrape_ashby
+
+    database.init_db()
+
+    # Get companies to scrape
+    if mode == "discovery":
+        sql = (
+            "SELECT id, company_name, normalized_name, priority_score "
+            "FROM matched_companies ORDER BY priority_score DESC"
+        )
+        params = ()
+        if limit:
+            sql += " LIMIT ?"
+            params = (limit,)
+        companies = database.query(sql, params)
+    else:  # monitor
+        ats_where = ""
+        if ats_filter:
+            placeholders = ",".join(["?"] * len(ats_filter))
+            ats_where = f"AND cas.ats_system IN ({placeholders})"
+        companies = database.query(
+            f"""SELECT mc.id, mc.company_name, mc.normalized_name, mc.priority_score
+               FROM matched_companies mc
+               INNER JOIN company_ats_status cas ON cas.normalized_name = mc.normalized_name
+               WHERE cas.ats_system IS NOT NULL {ats_where}
+               ORDER BY mc.priority_score DESC""",
+            tuple(ats_filter) if ats_filter else (),
+        )
+
+    _scrape_status["total"] = len(companies)
+
+    if not companies:
+        _scrape_status["log"].append("No companies found to scrape.")
+        return
+
+    os.makedirs(config.GREENHOUSE_DIR, exist_ok=True)
+    os.makedirs(config.LEVER_DIR, exist_ok=True)
+    os.makedirs(config.ASHBY_DIR, exist_ok=True)
+
+    # Import the helper functions from pipeline
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+    from pipeline import _scrape_one_company, _update_ats_status
+
+    def _process(company):
+        result = _scrape_one_company(
+            company, config.GREENHOUSE_DIR, config.LEVER_DIR, config.ASHBY_DIR,
+            ats_filter=ats_filter,
+        )
+        _update_ats_status(result, ats_filter=ats_filter)
+        return result
+
+    completed = 0
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {executor.submit(_process, c): c for c in companies}
+        for future in as_completed(futures):
+            completed += 1
+            _scrape_status["progress"] = completed
+            try:
+                result = future.result()
+                if result["status"] == "found":
+                    ats = result["ats"]
+                    _scrape_status["stats"][ats] = _scrape_status["stats"].get(ats, 0) + 1
+                    _scrape_status["stats"]["total_jobs"] += result["job_count"]
+                    _scrape_status["stats"]["new_jobs"] += result.get("new_job_count", 0)
+                    _scrape_status["log"].append(
+                        f"{result['name']}: {result['ats'].upper()} - {result['job_count']} jobs ({result.get('new_job_count', 0)} new)"
+                    )
+                else:
+                    _scrape_status["stats"]["not_found"] += 1
+            except Exception as e:
+                company = futures[future]
+                _scrape_status["stats"]["not_found"] += 1
+                _scrape_status["log"].append(f"{company['company_name']}: ERROR - {e}")
+
+    # Post-scrape cleanup: remove jobs older than N days
+    if cleanup_days and cleanup_days > 0:
+        _scrape_status["log"].append(f"Running post-scrape cleanup: removing jobs older than {cleanup_days} days...")
+        try:
+            cleanup_count = database.query(
+                f"""SELECT COUNT(*) as cnt FROM job_listings j
+                    WHERE {POSTED_DATE_EXPR} < datetime('now', ? || ' days')""",
+                (f"-{cleanup_days}",),
+            )
+            cnt = cleanup_count[0]["cnt"] if cleanup_count else 0
+            if cnt > 0:
+                database.execute(
+                    f"""DELETE FROM job_listings
+                        WHERE id IN (
+                            SELECT j.id FROM job_listings j
+                            WHERE {POSTED_DATE_EXPR} < datetime('now', ? || ' days')
+                        )""",
+                    (f"-{cleanup_days}",),
+                )
+                _scrape_status["log"].append(f"Post-scrape cleanup: deleted {cnt} jobs older than {cleanup_days} days.")
+                _scrape_status["stats"]["cleaned_up"] = cnt
+            else:
+                _scrape_status["log"].append("Post-scrape cleanup: no old jobs to remove.")
+        except Exception as e:
+            _scrape_status["log"].append(f"Post-scrape cleanup error: {e}")
+
+    # Keep log manageable
+    if len(_scrape_status["log"]) > 500:
+        _scrape_status["log"] = _scrape_status["log"][-500:]
+
+
+@app.get("/api/admin/scrape/status")
+async def admin_scrape_status():
+    """Return current scrape status."""
+    return _scrape_status
+
+
+@app.post("/api/admin/cleanup/inactive")
+async def admin_cleanup_inactive():
+    """Permanently delete all inactive (stale) jobs."""
+    try:
+        count_rows = database.query(
+            "SELECT COUNT(*) as cnt FROM job_listings WHERE is_active = 0"
+        )
+        count = count_rows[0]["cnt"] if count_rows else 0
+
+        if count == 0:
+            return {"ok": True, "deleted": 0, "message": "No inactive jobs to purge."}
+
+        database.execute("DELETE FROM job_listings WHERE is_active = 0")
+        return {"ok": True, "deleted": count, "message": f"Purged {count} inactive jobs."}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/admin/deactivate-stale")
+async def admin_deactivate_stale(request: Request):
+    """Mark jobs not seen in the last N days as inactive."""
+    body = await request.json()
+    days = body.get("days", 7)
+
+    try:
+        count_rows = database.query(
+            """SELECT COUNT(*) as cnt FROM job_listings
+               WHERE is_active = 1
+               AND last_seen_at < datetime('now', ? || ' days')""",
+            (f"-{days}",),
+        )
+        count = count_rows[0]["cnt"] if count_rows else 0
+
+        if count == 0:
+            return {"ok": True, "updated": 0, "message": f"No stale jobs found (all seen within {days} days)."}
+
+        database.execute(
+            """UPDATE job_listings SET is_active = 0
+               WHERE is_active = 1
+               AND last_seen_at < datetime('now', ? || ' days')""",
+            (f"-{days}",),
+        )
+        return {"ok": True, "updated": count, "message": f"Deactivated {count} jobs not seen in {days} days."}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/admin/export")
+async def admin_export():
+    """Trigger data export (CSV + JSON)."""
+    try:
+        import argparse
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+        from pipeline import cmd_export
+
+        # Create a minimal args namespace
+        args = argparse.Namespace()
+        cmd_export(args)
+
+        return {"ok": True, "message": f"Export complete. Files saved to {config.OUTPUT_DIR}/"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/admin/vacuum")
+async def admin_vacuum():
+    """Vacuum the SQLite database to reclaim space."""
+    try:
+        before_size = os.path.getsize(config.DB_PATH) if os.path.exists(config.DB_PATH) else 0
+        database.vacuum()
+        after_size = os.path.getsize(config.DB_PATH) if os.path.exists(config.DB_PATH) else 0
+
+        saved_mb = round((before_size - after_size) / (1024 * 1024), 2)
+        after_mb = round(after_size / (1024 * 1024), 2)
+        return {
+            "ok": True,
+            "message": f"Database vacuumed. Size: {after_mb} MB (saved {saved_mb} MB).",
+            "before_mb": round(before_size / (1024 * 1024), 2),
+            "after_mb": after_mb,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/admin/reactivate-all")
+async def admin_reactivate_all():
+    """Reactivate all inactive jobs (undo mass deactivation)."""
+    try:
+        count_rows = database.query(
+            "SELECT COUNT(*) as cnt FROM job_listings WHERE is_active = 0"
+        )
+        count = count_rows[0]["cnt"] if count_rows else 0
+
+        if count == 0:
+            return {"ok": True, "updated": 0, "message": "No inactive jobs to reactivate."}
+
+        database.execute("UPDATE job_listings SET is_active = 1 WHERE is_active = 0")
+        return {"ok": True, "updated": count, "message": f"Reactivated {count} jobs."}
+    except Exception as e:
+        return {"error": str(e)}

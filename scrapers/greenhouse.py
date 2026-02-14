@@ -87,10 +87,14 @@ def scrape_greenhouse(
                         company_name, normalized, jobs, scraped_at, company_id, db_conn,
                     )
                     metadata["new_job_count"] = new_count
+                    # Mark jobs not seen in this scrape as inactive
+                    _deactivate_stale_jobs(company_id, scraped_at, db_conn)
 
                 return metadata
 
             # Company uses Greenhouse but no matching jobs after filtering
+            if save_to_db and company_id:
+                _deactivate_stale_jobs(company_id, scraped_at, db_conn)
             return {
                 "original_name": company_name,
                 "normalized_name": normalized,
@@ -123,15 +127,19 @@ def _upsert_jobs(
     """
     from db import database
 
-    sql = """
+    upsert_sql = """
         INSERT INTO job_listings
             (company_id, company_name, ats_system, job_title, job_location,
-             job_url, department, scraped_at, first_seen_at, posted_at, raw_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             job_url, department, scraped_at, first_seen_at, last_seen_at,
+             posted_at, is_active, raw_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
         ON CONFLICT(job_url) DO UPDATE SET
             scraped_at = excluded.scraped_at,
+            last_seen_at = excluded.last_seen_at,
+            is_active = 1,
             raw_json = excluded.raw_json
     """
+    check_sql = "SELECT 1 FROM job_listings WHERE job_url = ? LIMIT 1"
 
     new_count = 0
     for job in jobs:
@@ -155,22 +163,48 @@ def _upsert_jobs(
             dept_name,
             scraped_at,
             scraped_at,  # first_seen_at (only set on initial insert)
+            scraped_at,  # last_seen_at (updated on every upsert)
             posted_at,
             json.dumps(job),
         )
 
         try:
             if db_conn is not None:
-                cursor = db_conn.execute(sql, params)
-                # rowcount > 0 means insert (not just update)
-                if cursor.rowcount > 0:
+                exists = db_conn.execute(check_sql, (job_url,)).fetchone()
+                db_conn.execute(upsert_sql, params)
+                if not exists:
                     new_count += 1
             else:
                 with database.get_db() as conn:
-                    cursor = conn.execute(sql, params)
-                    if cursor.rowcount > 0:
+                    exists = conn.execute(check_sql, (job_url,)).fetchone()
+                    conn.execute(upsert_sql, params)
+                    if not exists:
                         new_count += 1
-        except Exception:
-            pass  # skip problematic records
+        except Exception as e:
+            print(f"    DB error inserting job {job_url}: {e}")
 
     return new_count
+
+
+def _deactivate_stale_jobs(
+    company_id: int | None,
+    scraped_at: str,
+    db_conn=None,
+):
+    """Mark jobs as inactive if they weren't seen in the latest scrape.
+
+    Any Greenhouse job for this company whose ``last_seen_at`` is older than
+    *scraped_at* is no longer on the board and should be deactivated.
+    """
+    if not company_id:
+        return
+    from db import database
+
+    sql = """
+        UPDATE job_listings SET is_active = 0
+        WHERE company_id = ? AND ats_system = 'greenhouse' AND last_seen_at < ?
+    """
+    if db_conn is not None:
+        db_conn.execute(sql, (company_id, scraped_at))
+    else:
+        database.execute(sql, (company_id, scraped_at))

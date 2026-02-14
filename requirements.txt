@@ -1,8 +1,7 @@
 requests>=2.31.0
 pandas>=2.1.0
 openpyxl>=3.1.0
-thefuzz>=0.22.0
-python-Levenshtein>=0.25.0
+rapidfuzz>=3.6.0
 tqdm>=4.66.0
 fastapi>=0.115.0
 uvicorn>=0.34.0

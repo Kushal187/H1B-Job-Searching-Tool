@@ -11,6 +11,7 @@ H1B_DATA_DIR = os.path.join(DATA_DIR, "h1b")
 JOBS_DATA_DIR = os.path.join(DATA_DIR, "jobs")
 GREENHOUSE_DIR = os.path.join(JOBS_DATA_DIR, "greenhouse")
 LEVER_DIR = os.path.join(JOBS_DATA_DIR, "lever")
+ASHBY_DIR = os.path.join(JOBS_DATA_DIR, "ashby")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 DB_PATH = os.path.join(DATA_DIR, "h1b_jobs.db")
 
@@ -81,6 +82,7 @@ USCIS_LOCAL_FILES = [
 
 GREENHOUSE_API_URL = "https://boards-api.greenhouse.io/v1/boards/{company}/jobs"
 LEVER_API_URL = "https://api.lever.co/v0/postings/{company}"
+ASHBY_API_URL = "https://api.ashbyhq.com/posting-api/job-board/{company}"
 SCRAPE_DELAY = 0.15  # seconds between API requests
 SCRAPE_TIMEOUT = 10  # request timeout in seconds
 
