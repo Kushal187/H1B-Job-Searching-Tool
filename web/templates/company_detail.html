@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ company_name }} - H1B Job Search</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  </style>
+</head>
+<body class="bg-white text-gray-900 min-h-screen">
+
+  <!-- Nav -->
+  <nav class="border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+    <a href="/" class="text-lg font-semibold text-gray-900 hover:text-gray-700">H1B Job Search</a>
+    <div class="flex gap-6 text-sm">
+      <a href="/" class="text-gray-500 hover:text-gray-700">Jobs</a>
+      <a href="/companies" class="text-gray-500 hover:text-gray-700">Companies</a>
+    </div>
+  </nav>
+
+  <!-- Breadcrumb -->
+  <div class="px-6 pt-4 max-w-4xl mx-auto">
+    <div class="text-xs text-gray-400">
+      <a href="/companies" class="hover:text-gray-600">Companies</a>
+      <span class="mx-1">/</span>
+      <span class="text-gray-600">{{ company_name }}</span>
+    </div>
+  </div>
+
+  <!-- Company Header -->
+  <div id="company-header" class="px-6 pt-4 pb-6 max-w-4xl mx-auto">
+    <div class="text-center py-8 text-gray-400 text-sm">Loading company details...</div>
+  </div>
+
+  <!-- Jobs Section -->
+  <div class="px-6 max-w-4xl mx-auto">
+    <h2 class="text-sm font-semibold text-gray-900 mb-3" id="jobs-heading">Open Positions</h2>
+    <div id="jobs-container">
+      <div class="text-sm text-gray-400">Loading...</div>
+    </div>
+  </div>
+
+  <div class="h-12"></div>
+
+<script>
+  const companyName = {{ company_name | tojson }};
+
+  function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return { relative: '\u2014', full: '' };
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return { relative: '\u2014', full: '' };
+      const full = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      const days = Math.floor((new Date() - d) / 86400000);
+      let relative;
+      if (days === 0) relative = 'Today';
+      else if (days === 1) relative = 'Yesterday';
+      else if (days < 7) relative = days + 'd ago';
+      else if (days < 30) relative = Math.floor(days / 7) + 'w ago';
+      else relative = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return { relative, full };
+    } catch { return { relative: '\u2014', full: '' }; }
+  }
+
+  async function loadCompany() {
+    try {
+      const data = await (await fetch('/api/companies/' + encodeURIComponent(companyName))).json();
+      if (data.error) {
+        document.getElementById('company-header').innerHTML =
+          '<div class="text-center py-8 text-red-500 text-sm">Company not found</div>';
+        return;
+      }
+      renderHeader(data.company, data.h1b);
+      renderJobs(data.jobs);
+    } catch {
+      document.getElementById('company-header').innerHTML =
+        '<div class="text-center py-8 text-red-500 text-sm">Failed to load company</div>';
+    }
+  }
+
+  function renderHeader(co, h1b) {
+    const sourceBadge = co.source === 'both'
+      ? '<span class="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded">H1B + SEC</span>'
+      : co.source === 'h1b_only'
+      ? '<span class="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded">H1B Sponsor</span>'
+      : '<span class="text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded">SEC Filing</span>';
+
+    // Aggregate H1B stats
+    let totalApproved = 0, totalDenied = 0, locations = new Set();
+    h1b.forEach(r => {
+      totalApproved += (r.initial_approvals || 0) + (r.continuing_approvals || 0);
+      totalDenied += (r.initial_denials || 0);
+      if (r.city && r.state) locations.add(r.city + ', ' + r.state);
+    });
+
+    const fiscalYears = [...new Set(h1b.map(r => r.fiscal_year))].sort().reverse().join(', ');
+    const locStr = [...locations].slice(0, 3).join(' \u00b7 ');
+
+    const header = document.getElementById('company-header');
+    header.innerHTML = `
+      <div class="border border-gray-200 rounded-lg p-6">
+        <div class="flex items-start justify-between">
+          <div>
+            <h1 class="text-xl font-semibold text-gray-900">${esc(co.company_name)}</h1>
+            <div class="flex items-center gap-2 mt-2">${sourceBadge}</div>
+          </div>
+          <div class="text-right text-sm text-gray-500">
+            <div class="text-2xl font-semibold text-gray-900">${co.priority_score ? co.priority_score.toFixed(1) : '0'}</div>
+            <div class="text-xs text-gray-400">priority score</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-5 border-t border-gray-100">
+          <div>
+            <div class="text-lg font-semibold text-gray-900">${totalApproved}</div>
+            <div class="text-xs text-gray-500">H1B approvals</div>
+          </div>
+          <div>
+            <div class="text-lg font-semibold ${totalDenied > 0 ? 'text-red-600' : 'text-gray-900'}">${totalDenied}</div>
+            <div class="text-xs text-gray-500">H1B denials</div>
+          </div>
+          <div>
+            <div class="text-sm font-medium text-gray-900">${fiscalYears || '\u2014'}</div>
+            <div class="text-xs text-gray-500">fiscal years</div>
+          </div>
+          <div>
+            <div class="text-sm font-medium text-gray-900 truncate" title="${esc(locStr)}">${locStr || '\u2014'}</div>
+            <div class="text-xs text-gray-500">locations</div>
+          </div>
+        </div>
+
+        ${co.sec_amount_raised > 0 ? `
+        <div class="mt-4 pt-4 border-t border-gray-100 text-sm text-gray-600">
+          SEC amount raised: <span class="font-medium text-gray-900">$${(co.sec_amount_raised / 1e6).toFixed(1)}M</span>
+        </div>` : ''}
+      </div>
+    `;
+  }
+
+  function renderJobs(jobs) {
+    const c = document.getElementById('jobs-container');
+    const heading = document.getElementById('jobs-heading');
+
+    if (!jobs.length) {
+      heading.textContent = 'Open Positions';
+      c.innerHTML = '<div class="text-sm text-gray-400 py-6">No entry-level openings found yet for this company.</div>';
+      return;
+    }
+
+    heading.textContent = `Open Positions (${jobs.length})`;
+    c.innerHTML = '<div class="grid gap-3">' + jobs.map(job => {
+      const posted = formatDate(job.posted_date || job.first_seen_at);
+      return `
+        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex-1 min-w-0">
+              <h3 class="font-medium text-sm text-gray-900">${esc(job.job_title)}</h3>
+              <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
+                ${job.job_location ? `<span>${esc(job.job_location)}</span>` : ''}
+                ${job.department ? `<span>${esc(job.department)}</span>` : ''}
+                <span>${posted.relative}${posted.full ? ' \u00b7 ' + posted.full : ''}</span>
+              </div>
+            </div>
+            <a href="${esc(job.job_url)}" target="_blank" rel="noopener"
+               class="shrink-0 inline-flex items-center px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors">
+              Apply
+            </a>
+          </div>
+        </div>`;
+    }).join('') + '</div>';
+  }
+
+  loadCompany();
+</script>
+
+</body>
+</html>

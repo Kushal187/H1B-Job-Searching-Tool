@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.h1bjobs.scrape</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/kushalpendekanti/Documents/Coding-Fun/job-search-tool/scripts/daily_scrape.sh</string>
+    </array>
+
+    <!-- Run every 6 hours: midnight, 6am, noon, 6pm -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Hour</key><integer>0</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>6</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>12</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>18</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+    </array>
+
+    <!-- Run missed jobs if laptop was asleep -->
+    <key>StartInterval</key>
+    <integer>21600</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/kushalpendekanti/Documents/Coding-Fun/job-search-tool/logs/launchd_stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/kushalpendekanti/Documents/Coding-Fun/job-search-tool/logs/launchd_stderr.log</string>
+</dict>
+</plist>

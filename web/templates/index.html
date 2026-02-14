@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>H1B Job Search</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .job-new { border-left: 3px solid #2563eb; background: linear-gradient(90deg, #eff6ff 0%, #ffffff 40%); }
+    .job-recent { border-left: 3px solid #f59e0b; background: linear-gradient(90deg, #fffbeb 0%, #ffffff 40%); }
+    .badge-new { background: #2563eb; color: white; font-weight: 600; font-size: 10px; padding: 1px 7px; border-radius: 9999px; letter-spacing: 0.05em; animation: pulse-badge 2s ease-in-out infinite; }
+    .badge-recent { background: #f59e0b; color: white; font-weight: 600; font-size: 10px; padding: 1px 7px; border-radius: 9999px; letter-spacing: 0.05em; }
+    @keyframes pulse-badge { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+  </style>
+</head>
+<body class="bg-white text-gray-900 min-h-screen">
+
+  <!-- Nav -->
+  <nav class="border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+    <a href="/" class="text-lg font-semibold text-gray-900 hover:text-gray-700">H1B Job Search</a>
+    <div class="flex gap-6 text-sm">
+      <a href="/" class="text-gray-900 font-medium border-b-2 border-gray-900 pb-0.5">Jobs</a>
+      <a href="/companies" class="text-gray-500 hover:text-gray-700">Companies</a>
+    </div>
+  </nav>
+
+  <!-- Hero / Search -->
+  <div class="px-6 pt-8 pb-4 max-w-3xl mx-auto text-center">
+    <div class="flex items-center justify-center gap-3 mb-4 flex-wrap" id="stats-line">
+      <span class="text-xs text-gray-400">Loading...</span>
+    </div>
+    <input
+      id="search"
+      type="text"
+      placeholder="Search jobs or companies..."
+      class="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-200"
+    />
+    <!-- Quick filter tags -->
+    <div class="flex flex-wrap justify-center gap-2 mt-3" id="quick-tags">
+      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Software Engineer I">Software Engineer I</button>
+      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Software Engineer">Software Engineer</button>
+      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="New Grad">New Grad</button>
+      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Data Engineer">Data Engineer</button>
+      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Product Manager">Product Manager</button>
+      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="ML Engineer">ML Engineer</button>
+      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Full Stack">Full Stack</button>
+      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="DevOps">DevOps</button>
+      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Platform Engineer">Platform Engineer</button>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="px-6 py-2 flex flex-wrap items-center gap-3 border-b border-gray-100 max-w-5xl mx-auto">
+    <select id="freshness-filter" class="border border-gray-300 rounded px-3 py-1.5 text-xs focus:outline-none focus:border-gray-500">
+      <option value="">All time</option>
+      <option value="24h">Last 24 hours</option>
+      <option value="48h">Last 48 hours</option>
+    </select>
+    <select id="company-filter" class="border border-gray-300 rounded px-3 py-1.5 text-xs focus:outline-none focus:border-gray-500">
+      <option value="">All companies</option>
+    </select>
+    <select id="sort" class="border border-gray-300 rounded px-3 py-1.5 text-xs focus:outline-none focus:border-gray-500">
+      <option value="posted_desc">Newest first</option>
+      <option value="posted_asc">Oldest first</option>
+      <option value="company_asc">Company A-Z</option>
+      <option value="priority_desc">Priority score</option>
+      <option value="title_asc">Title A-Z</option>
+    </select>
+    <span id="result-count" class="text-xs text-gray-400 ml-auto"></span>
+  </div>
+
+  <!-- Job Cards -->
+  <div id="jobs-container" class="px-6 py-4 max-w-5xl mx-auto">
+    <div class="text-center py-12 text-gray-400 text-sm">Loading jobs...</div>
+  </div>
+
+  <!-- Pagination -->
+  <div id="pagination" class="px-6 py-4 flex items-center justify-between text-sm text-gray-500 max-w-5xl mx-auto border-t border-gray-100"></div>
+
+<script>
+  let currentPage = 1, currentSearch = '', currentCompany = '', currentSort = 'posted_desc', currentFreshness = '';
+  let activeTag = null;
+
+  function formatDate(dateStr) {
+    if (!dateStr) return { relative: '\u2014', full: '' };
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return { relative: '\u2014', full: '' };
+      const full = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      // Compare calendar dates in local timezone (not raw ms diff)
+      const now = new Date();
+      const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const postLocal = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const days = Math.round((todayLocal - postLocal) / 86400000);
+      let relative;
+      if (days === 0) relative = 'Today';
+      else if (days === 1) relative = 'Yesterday';
+      else if (days < 7) relative = days + 'd ago';
+      else if (days < 30) relative = Math.floor(days / 7) + 'w ago';
+      else relative = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return { relative, full };
+    } catch { return { relative: '\u2014', full: '' }; }
+  }
+
+  function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function getFreshness(dateStr) {
+    if (!dateStr) return null;
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return null;
+      const now = new Date();
+      const hoursAgo = (now - d) / 3600000;
+      if (hoursAgo <= 24) return 'new';       // posted within last 24 hours
+      if (hoursAgo <= 48) return 'recent';     // posted within last 48 hours
+      return null;
+    } catch { return null; }
+  }
+
+  function encCompany(name) { return encodeURIComponent(name); }
+
+  async function loadStats() {
+    try {
+      const r = await (await fetch('/api/stats')).json();
+      const el = document.getElementById('stats-line');
+      let html = '';
+
+      html += `
+        <div class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 rounded-full">
+          <span class="text-sm font-semibold text-gray-900">${r.total_jobs.toLocaleString()}</span>
+          <span class="text-xs text-gray-500">jobs</span>
+          <span class="text-gray-300 mx-0.5">\u00b7</span>
+          <span class="text-sm font-semibold text-gray-900">${r.companies_with_jobs}</span>
+          <span class="text-xs text-gray-500">companies</span>
+        </div>`;
+
+      if (r.new_24h > 0) {
+        html += `
+          <div class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-full cursor-pointer hover:bg-blue-100 transition-colors" onclick="document.getElementById('freshness-filter').value='24h';currentFreshness='24h';currentPage=1;loadJobs();">
+            <span class="inline-block w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>
+            <span class="text-sm font-semibold text-blue-700">${r.new_24h}</span>
+            <span class="text-xs text-blue-600">new today</span>
+          </div>`;
+      }
+
+      if (r.new_48h > r.new_24h) {
+        html += `
+          <div class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 rounded-full cursor-pointer hover:bg-amber-100 transition-colors" onclick="document.getElementById('freshness-filter').value='48h';currentFreshness='48h';currentPage=1;loadJobs();">
+            <span class="inline-block w-1.5 h-1.5 bg-amber-400 rounded-full"></span>
+            <span class="text-sm font-semibold text-amber-700">${r.new_48h}</span>
+            <span class="text-xs text-amber-600">in 48h</span>
+          </div>`;
+      }
+
+      html += `
+        <div class="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 rounded-full">
+          <span class="text-sm font-semibold text-green-700">${r.total_sponsors.toLocaleString()}</span>
+          <span class="text-xs text-green-600">H1B sponsors</span>
+        </div>`;
+
+      el.innerHTML = html;
+    } catch {}
+  }
+
+  async function loadJobs() {
+    const params = new URLSearchParams({ search: currentSearch, company: currentCompany, freshness: currentFreshness, sort: currentSort, page: currentPage, per_page: 50 });
+    try {
+      const data = await (await fetch('/api/jobs?' + params)).json();
+      renderJobs(data.jobs);
+      renderPagination(data);
+      document.getElementById('result-count').textContent = data.total + ' results';
+    } catch {
+      document.getElementById('jobs-container').innerHTML = '<div class="text-center py-12 text-red-500 text-sm">Failed to load jobs</div>';
+    }
+  }
+
+  function renderJobs(jobs) {
+    const c = document.getElementById('jobs-container');
+    if (!jobs.length) { c.innerHTML = '<div class="text-center py-12 text-gray-400 text-sm">No jobs found</div>'; return; }
+
+    c.innerHTML = '<div class="grid gap-3">' + jobs.map(job => {
+      const dateField = job.posted_date || job.first_seen_at;
+      const posted = formatDate(dateField);
+      const freshness = getFreshness(dateField);
+      const h1b = job.h1b_approvals > 0
+        ? `<span class="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs px-2 py-0.5 rounded-full">${job.h1b_approvals} H1B</span>`
+        : '';
+      const source = job.source
+        ? `<span class="text-xs text-gray-400">${job.source === 'both' ? 'H1B + SEC' : job.source === 'h1b_only' ? 'H1B' : 'SEC'}</span>`
+        : '';
+
+      const freshBadge = freshness === 'new'
+        ? '<span class="badge-new">NEW</span>'
+        : freshness === 'recent'
+          ? '<span class="badge-recent">48H</span>'
+          : '';
+      const cardClass = freshness === 'new'
+        ? 'job-new'
+        : freshness === 'recent'
+          ? 'job-recent'
+          : '';
+
+      return `
+        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow ${cardClass}">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <h3 class="font-medium text-sm text-gray-900">${esc(job.job_title)}</h3>
+                ${freshBadge}
+              </div>
+              <div class="flex items-center gap-2 mt-1">
+                <a href="/companies/${encCompany(job.company_name)}" class="text-sm text-blue-600 hover:text-blue-800 hover:underline">${esc(job.company_name)}</a>
+                ${h1b} ${source}
+              </div>
+              <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
+                ${job.job_location ? `<span>${esc(job.job_location)}</span>` : ''}
+                ${job.department ? `<span>${esc(job.department)}</span>` : ''}
+                <span title="${posted.full}">${posted.relative}${posted.full ? ' \u00b7 ' + posted.full : ''}</span>
+              </div>
+            </div>
+            <a href="${esc(job.job_url)}" target="_blank" rel="noopener"
+               class="shrink-0 inline-flex items-center px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors">
+              Apply
+            </a>
+          </div>
+        </div>`;
+    }).join('') + '</div>';
+  }
+
+  function renderPagination(data) {
+    const div = document.getElementById('pagination');
+    if (!data.total) { div.innerHTML = ''; return; }
+    const start = (data.page - 1) * data.per_page + 1;
+    const end = Math.min(data.page * data.per_page, data.total);
+    div.innerHTML = `
+      <span class="text-xs">Showing ${start}\u2013${end} of ${data.total}</span>
+      <div class="flex gap-2">
+        <button onclick="goPage(${data.page - 1})" ${data.page <= 1 ? 'disabled' : ''}
+          class="px-3 py-1 border border-gray-300 rounded text-xs disabled:opacity-30 hover:bg-gray-50">Prev</button>
+        <span class="px-2 py-1 text-xs text-gray-400">${data.page} / ${data.total_pages}</span>
+        <button onclick="goPage(${data.page + 1})" ${data.page >= data.total_pages ? 'disabled' : ''}
+          class="px-3 py-1 border border-gray-300 rounded text-xs disabled:opacity-30 hover:bg-gray-50">Next</button>
+      </div>`;
+  }
+
+  function goPage(p) { currentPage = p; loadJobs(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+
+  // Company dropdown (just companies with jobs, for filtering)
+  async function loadCompanyFilter() {
+    try {
+      const data = await (await fetch('/api/companies?per_page=100')).json();
+      const select = document.getElementById('company-filter');
+      data.companies.filter(c => c.job_count > 0).forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.company_name;
+        opt.textContent = c.company_name + ' (' + c.job_count + ')';
+        select.appendChild(opt);
+      });
+    } catch {}
+  }
+
+  // Quick filter tags
+  document.querySelectorAll('.tag-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const q = btn.dataset.q;
+      const searchInput = document.getElementById('search');
+      // Toggle off if same tag clicked
+      if (activeTag === btn) {
+        activeTag.classList.remove('bg-gray-900', 'text-white', 'border-gray-900');
+        activeTag.classList.add('text-gray-600', 'border-gray-300');
+        activeTag = null;
+        searchInput.value = '';
+        currentSearch = '';
+      } else {
+        // Deactivate previous
+        if (activeTag) {
+          activeTag.classList.remove('bg-gray-900', 'text-white', 'border-gray-900');
+          activeTag.classList.add('text-gray-600', 'border-gray-300');
+        }
+        btn.classList.remove('text-gray-600', 'border-gray-300');
+        btn.classList.add('bg-gray-900', 'text-white', 'border-gray-900');
+        activeTag = btn;
+        searchInput.value = q;
+        currentSearch = q;
+      }
+      currentPage = 1;
+      loadJobs();
+    });
+  });
+
+  // Search input
+  let searchTimeout;
+  document.getElementById('search').addEventListener('input', (e) => {
+    clearTimeout(searchTimeout);
+    // Deactivate tag if user types manually
+    if (activeTag) {
+      activeTag.classList.remove('bg-gray-900', 'text-white', 'border-gray-900');
+      activeTag.classList.add('text-gray-600', 'border-gray-300');
+      activeTag = null;
+    }
+    searchTimeout = setTimeout(() => { currentSearch = e.target.value.trim(); currentPage = 1; loadJobs(); }, 300);
+  });
+
+  document.getElementById('freshness-filter').addEventListener('change', (e) => { currentFreshness = e.target.value; currentPage = 1; loadJobs(); });
+  document.getElementById('company-filter').addEventListener('change', (e) => { currentCompany = e.target.value; currentPage = 1; loadJobs(); });
+  document.getElementById('sort').addEventListener('change', (e) => { currentSort = e.target.value; currentPage = 1; loadJobs(); });
+
+  // Init
+  loadStats();
+  loadJobs();
+  loadCompanyFilter();
+</script>
+
+</body>
+</html>

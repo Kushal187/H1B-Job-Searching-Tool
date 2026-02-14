@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Companies - H1B Job Search</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  </style>
+</head>
+<body class="bg-white text-gray-900 min-h-screen">
+
+  <!-- Nav -->
+  <nav class="border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+    <a href="/" class="text-lg font-semibold text-gray-900 hover:text-gray-700">H1B Job Search</a>
+    <div class="flex gap-6 text-sm">
+      <a href="/" class="text-gray-500 hover:text-gray-700">Jobs</a>
+      <a href="/companies" class="text-gray-900 font-medium border-b-2 border-gray-900 pb-0.5">Companies</a>
+    </div>
+  </nav>
+
+  <!-- Search -->
+  <div class="px-6 pt-8 pb-4 max-w-4xl mx-auto">
+    <h1 class="text-xl font-semibold mb-1">H1B Tech Sponsors</h1>
+    <p class="text-sm text-gray-500 mb-4" id="companies-subtitle">Companies in tech that have sponsored H1B visas (FY2025-2026)</p>
+    <input
+      id="search"
+      type="text"
+      placeholder="Search companies..."
+      class="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-200"
+    />
+  </div>
+
+  <!-- Company Grid -->
+  <div id="companies-container" class="px-6 pb-4 max-w-4xl mx-auto">
+    <div class="text-center py-12 text-gray-400 text-sm">Loading companies...</div>
+  </div>
+
+  <!-- Pagination -->
+  <div id="pagination" class="px-6 py-4 flex items-center justify-between text-sm text-gray-500 max-w-4xl mx-auto border-t border-gray-100"></div>
+
+<script>
+  let currentPage = 1, currentSearch = '';
+
+  function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  function encCompany(name) { return encodeURIComponent(name); }
+
+  async function loadCompanies() {
+    const params = new URLSearchParams({ search: currentSearch, page: currentPage, per_page: 30 });
+    try {
+      const data = await (await fetch('/api/companies?' + params)).json();
+      renderCompanies(data.companies, data.total);
+      renderPagination(data);
+    } catch {
+      document.getElementById('companies-container').innerHTML =
+        '<div class="text-center py-12 text-red-500 text-sm">Failed to load companies</div>';
+    }
+  }
+
+  function renderCompanies(companies, total) {
+    const c = document.getElementById('companies-container');
+    document.getElementById('companies-subtitle').textContent =
+      `${total.toLocaleString()} companies in tech that have sponsored H1B visas (FY2025\u20132026)`;
+
+    if (!companies.length) {
+      c.innerHTML = '<div class="text-center py-12 text-gray-400 text-sm">No companies found</div>';
+      return;
+    }
+
+    c.innerHTML = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">' + companies.map(co => {
+      const sourceBadge = co.source === 'both'
+        ? '<span class="text-[11px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">H1B + SEC</span>'
+        : co.source === 'h1b_only'
+        ? '<span class="text-[11px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">H1B</span>'
+        : '<span class="text-[11px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">SEC</span>';
+
+      const jobsBadge = co.job_count > 0
+        ? `<span class="text-[11px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded">${co.job_count} opening${co.job_count > 1 ? 's' : ''}</span>`
+        : '';
+
+      return `
+        <a href="/companies/${encCompany(co.company_name)}" class="block border border-gray-200 rounded-lg p-4 hover:shadow-sm hover:border-gray-300 transition-all">
+          <h3 class="font-medium text-sm text-gray-900 truncate">${esc(co.company_name)}</h3>
+          <div class="flex flex-wrap items-center gap-1.5 mt-2">
+            ${sourceBadge} ${jobsBadge}
+          </div>
+          <div class="flex items-center gap-4 mt-3 text-xs text-gray-500">
+            <span>${co.h1b_approval_count || 0} H1B approvals</span>
+            <span>Score: ${(co.priority_score || 0).toFixed(1)}</span>
+          </div>
+        </a>`;
+    }).join('') + '</div>';
+  }
+
+  function renderPagination(data) {
+    const div = document.getElementById('pagination');
+    if (!data.total) { div.innerHTML = ''; return; }
+    const start = (data.page - 1) * data.per_page + 1;
+    const end = Math.min(data.page * data.per_page, data.total);
+    div.innerHTML = `
+      <span class="text-xs">Showing ${start}\u2013${end} of ${data.total.toLocaleString()}</span>
+      <div class="flex gap-2">
+        <button onclick="goPage(${data.page - 1})" ${data.page <= 1 ? 'disabled' : ''}
+          class="px-3 py-1 border border-gray-300 rounded text-xs disabled:opacity-30 hover:bg-gray-50">Prev</button>
+        <span class="px-2 py-1 text-xs text-gray-400">${data.page} / ${data.total_pages}</span>
+        <button onclick="goPage(${data.page + 1})" ${data.page >= data.total_pages ? 'disabled' : ''}
+          class="px-3 py-1 border border-gray-300 rounded text-xs disabled:opacity-30 hover:bg-gray-50">Next</button>
+      </div>`;
+  }
+
+  function goPage(p) { currentPage = p; loadCompanies(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+
+  let searchTimeout;
+  document.getElementById('search').addEventListener('input', (e) => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => { currentSearch = e.target.value.trim(); currentPage = 1; loadCompanies(); }, 300);
+  });
+
+  loadCompanies();
+</script>
+
+</body>
+</html>
