@@ -73,7 +73,7 @@ def _migrate():
         for sql in migrations:
             try:
                 conn.execute(sql)
-            except Exception:
+            except sqlite3.OperationalError:
                 pass  # column/index already exists — safe to ignore
 
 
@@ -105,7 +105,9 @@ def insert_many(table: str, rows: list[dict], conn: sqlite3.Connection | None = 
             _execute(c)
 
 
-def query(sql: str, params: tuple = (), conn: sqlite3.Connection | None = None) -> list[dict]:
+def query(
+    sql: str, params: tuple = (), conn: sqlite3.Connection | None = None
+) -> list[dict]:
     """Execute a SELECT query and return results as a list of dicts.
 
     Args:
@@ -116,6 +118,7 @@ def query(sql: str, params: tuple = (), conn: sqlite3.Connection | None = None) 
     Returns:
         List of dicts, one per row.
     """
+
     def _execute(c: sqlite3.Connection) -> list[dict]:
         cursor = c.execute(sql, params)
         columns = [desc[0] for desc in cursor.description]

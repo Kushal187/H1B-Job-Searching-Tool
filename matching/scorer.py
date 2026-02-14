@@ -96,4 +96,6 @@ def update_priority_scores():
         )
         print(f"  Top 10 companies:")
         for i, c in enumerate(top, 1):
-            print(f"    {i:2d}. {c['company_name'][:50]:<50s} score={c['priority_score']:.1f}")
+            print(
+                f"    {i:2d}. {c['company_name'][:50]:<50s} score={c['priority_score']:.1f}"
+            )

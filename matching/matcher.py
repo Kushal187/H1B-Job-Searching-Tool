@@ -18,11 +18,13 @@ from db import database
 
 def _get_unique_sec_companies() -> dict[str, dict]:
     """Get unique SEC companies grouped by normalized name."""
-    rows = database.query("""
+    rows = database.query(
+        """
         SELECT company_name, normalized_name, state, industry_group, total_amount_sold
         FROM sec_formd_companies
         WHERE normalized_name IS NOT NULL AND normalized_name != ''
-    """)
+    """
+    )
 
     grouped = {}
     for row in rows:
@@ -36,20 +38,22 @@ def _get_unique_sec_companies() -> dict[str, dict]:
             }
         else:
             existing = grouped[key]
-            existing["total_amount_sold"] += (row["total_amount_sold"] or 0)
+            existing["total_amount_sold"] += row["total_amount_sold"] or 0
 
     return grouped
 
 
 def _get_unique_h1b_sponsors() -> dict[str, dict]:
     """Get unique H1B sponsors grouped by normalized name."""
-    rows = database.query("""
+    rows = database.query(
+        """
         SELECT employer_name, normalized_name, city, state,
                initial_approvals, continuing_approvals, initial_denials,
                fiscal_year
         FROM h1b_sponsors
         WHERE normalized_name IS NOT NULL AND normalized_name != ''
-    """)
+    """
+    )
 
     grouped = {}
     for row in rows:
@@ -65,9 +69,9 @@ def _get_unique_h1b_sponsors() -> dict[str, dict]:
             }
         else:
             existing = grouped[key]
-            existing["initial_approvals"] += (row["initial_approvals"] or 0)
-            existing["continuing_approvals"] += (row["continuing_approvals"] or 0)
-            existing["initial_denials"] += (row["initial_denials"] or 0)
+            existing["initial_approvals"] += row["initial_approvals"] or 0
+            existing["continuing_approvals"] += row["continuing_approvals"] or 0
+            existing["initial_denials"] += row["initial_denials"] or 0
             if (row.get("fiscal_year") or "") > (existing.get("fiscal_year") or ""):
                 existing["fiscal_year"] = row["fiscal_year"]
 
@@ -114,8 +118,10 @@ def _fuzzy_match_names(
     if not unmatched_sec or not unmatched_h1b:
         return matches
 
-    print(f"  Fuzzy matching {len(unmatched_sec)} SEC names against "
-          f"{len(unmatched_h1b)} H1B names (prefix-bucketed)...")
+    print(
+        f"  Fuzzy matching {len(unmatched_sec)} SEC names against "
+        f"{len(unmatched_h1b)} H1B names (prefix-bucketed)..."
+    )
 
     # Build prefix buckets for H1B names (2-char prefix)
     PREFIX_LEN = 2
@@ -173,11 +179,16 @@ def _fuzzy_match_names(
 
         processed += 1
         if processed % 20000 == 0:
-            print(f"    Processed {processed}/{len(unmatched_sec)} "
-                  f"({fuzzy_count} fuzzy matches so far)", flush=True)
+            print(
+                f"    Processed {processed}/{len(unmatched_sec)} "
+                f"({fuzzy_count} fuzzy matches so far)",
+                flush=True,
+            )
 
-    print(f"    Processed {processed}/{len(unmatched_sec)} "
-          f"({fuzzy_count} fuzzy matches total)")
+    print(
+        f"    Processed {processed}/{len(unmatched_sec)} "
+        f"({fuzzy_count} fuzzy matches total)"
+    )
     print(f"  Fuzzy matches: {fuzzy_count}")
     return matches
 
@@ -224,46 +235,54 @@ def build_matched_companies():
         h1b = h1b_sponsors[h1b_name]
 
         company_name = h1b.get("employer_name") or sec.get("company_name", "")
-        total_approvals = (h1b.get("initial_approvals", 0) +
-                          h1b.get("continuing_approvals", 0))
+        total_approvals = h1b.get("initial_approvals", 0) + h1b.get(
+            "continuing_approvals", 0
+        )
 
-        records.append({
-            "company_name": company_name,
-            "normalized_name": sec_name,
-            "source": "both",
-            "h1b_approval_count": total_approvals,
-            "sec_amount_raised": sec.get("total_amount_sold", 0),
-            "priority_score": 0,
-        })
+        records.append(
+            {
+                "company_name": company_name,
+                "normalized_name": sec_name,
+                "source": "both",
+                "h1b_approval_count": total_approvals,
+                "sec_amount_raised": sec.get("total_amount_sold", 0),
+                "priority_score": 0,
+            }
+        )
         seen_normalized.add(sec_name)
         seen_normalized.add(h1b_name)
 
     # 2. SEC-only companies
     for name, sec in sec_companies.items():
         if name not in seen_normalized:
-            records.append({
-                "company_name": sec["company_name"],
-                "normalized_name": name,
-                "source": "sec_only",
-                "h1b_approval_count": 0,
-                "sec_amount_raised": sec.get("total_amount_sold", 0),
-                "priority_score": 0,
-            })
+            records.append(
+                {
+                    "company_name": sec["company_name"],
+                    "normalized_name": name,
+                    "source": "sec_only",
+                    "h1b_approval_count": 0,
+                    "sec_amount_raised": sec.get("total_amount_sold", 0),
+                    "priority_score": 0,
+                }
+            )
             seen_normalized.add(name)
 
     # 3. H1B-only sponsors
     for name, h1b in h1b_sponsors.items():
         if name not in seen_normalized:
-            total_approvals = (h1b.get("initial_approvals", 0) +
-                              h1b.get("continuing_approvals", 0))
-            records.append({
-                "company_name": h1b["employer_name"],
-                "normalized_name": name,
-                "source": "h1b_only",
-                "h1b_approval_count": total_approvals,
-                "sec_amount_raised": 0,
-                "priority_score": 0,
-            })
+            total_approvals = h1b.get("initial_approvals", 0) + h1b.get(
+                "continuing_approvals", 0
+            )
+            records.append(
+                {
+                    "company_name": h1b["employer_name"],
+                    "normalized_name": name,
+                    "source": "h1b_only",
+                    "h1b_approval_count": total_approvals,
+                    "sec_amount_raised": 0,
+                    "priority_score": 0,
+                }
+            )
             seen_normalized.add(name)
 
     # Upsert into database (preserves existing IDs)
@@ -303,8 +322,14 @@ def _upsert_matched_companies(records: list[dict]):
             priority_score = excluded.priority_score
     """
     values = [
-        (r["company_name"], r["normalized_name"], r["source"],
-         r["h1b_approval_count"], r["sec_amount_raised"], r["priority_score"])
+        (
+            r["company_name"],
+            r["normalized_name"],
+            r["source"],
+            r["h1b_approval_count"],
+            r["sec_amount_raised"],
+            r["priority_score"],
+        )
         for r in records
     ]
     with database.get_db() as conn:

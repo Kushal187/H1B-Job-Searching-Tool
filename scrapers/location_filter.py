@@ -170,9 +170,11 @@ def is_usa_location(location_name: str) -> bool:
     loc_lower = location_name.lower().strip()
 
     # Early rejection: if string contains a non-US country/region indicator,
-    # reject it to avoid false positives like "Cambridge, UK" or "Richmond, Canada"
+    # reject it to avoid false positives like "Cambridge, UK" or "Richmond, Canada".
+    # Use word-boundary regex to avoid rejecting US states like Indiana ("india")
+    # or New Mexico ("mexico").
     for indicator in NON_US_INDICATORS:
-        if indicator in loc_lower:
+        if re.search(rf"\b{re.escape(indicator)}\b", loc_lower):
             return False
 
     # Quick check: entire string matches a keyword pattern

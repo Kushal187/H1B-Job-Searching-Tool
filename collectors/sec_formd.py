@@ -106,7 +106,7 @@ def parse_zip(zip_path: str) -> list[dict]:
             submissions = _read_tsv_from_zip(zf, "SUBMISSION")
             issuers = _read_tsv_from_zip(zf, "ISSUER")
             offerings = _read_tsv_from_zip(zf, "OFFERING")
-    except (zipfile.BadZipFile, Exception) as e:
+    except (zipfile.BadZipFile, OSError) as e:
         print(f"  Error reading {zip_path}: {e}")
         return []
 
@@ -143,15 +143,21 @@ def parse_zip(zip_path: str) -> list[dict]:
         except (ValueError, TypeError):
             total_amount = None
 
-        records.append({
-            "company_name": company_name,
-            "cik_number": (issuer.get("CIK") or "").strip() or None,
-            "state": (issuer.get("STATEORCOUNTRY") or "").strip() or None,
-            "industry_group": (offer.get("INDUSTRYGROUPTYPE") or "").strip() or None,
-            "total_amount_sold": total_amount,
-            "filing_date": (sub.get("FILING_DATE") or sub.get("FILINGDATE") or "").strip() or None,
-            "normalized_name": normalize_company_name(company_name),
-        })
+        records.append(
+            {
+                "company_name": company_name,
+                "cik_number": (issuer.get("CIK") or "").strip() or None,
+                "state": (issuer.get("STATEORCOUNTRY") or "").strip() or None,
+                "industry_group": (offer.get("INDUSTRYGROUPTYPE") or "").strip()
+                or None,
+                "total_amount_sold": total_amount,
+                "filing_date": (
+                    sub.get("FILING_DATE") or sub.get("FILINGDATE") or ""
+                ).strip()
+                or None,
+                "normalized_name": normalize_company_name(company_name),
+            }
+        )
 
     return records
 
@@ -159,7 +165,9 @@ def parse_zip(zip_path: str) -> list[dict]:
 # ─── EFTS API Fallback (2026 Q1 gap) ────────────────────────────────────────
 
 
-def fetch_recent_efts(start_date: str | None = None, end_date: str | None = None) -> list[dict]:
+def fetch_recent_efts(
+    start_date: str | None = None, end_date: str | None = None
+) -> list[dict]:
     """Fetch recent Form D filings via the EFTS search-index API.
 
     Used to fill the gap between the last quarterly bulk data set and today.
@@ -224,18 +232,22 @@ def fetch_recent_efts(start_date: str | None = None, end_date: str | None = None
             if not company_name:
                 continue
 
-            records.append({
-                "company_name": company_name,
-                "cik_number": ciks[0] if ciks else None,
-                "state": (source.get("biz_states") or [None])[0],
-                "industry_group": None,  # Not available from EFTS
-                "total_amount_sold": None,  # Not available from EFTS
-                "filing_date": source.get("file_date"),
-                "normalized_name": normalize_company_name(company_name),
-            })
+            records.append(
+                {
+                    "company_name": company_name,
+                    "cik_number": ciks[0] if ciks else None,
+                    "state": (source.get("biz_states") or [None])[0],
+                    "industry_group": None,  # Not available from EFTS
+                    "total_amount_sold": None,  # Not available from EFTS
+                    "filing_date": source.get("file_date"),
+                    "normalized_name": normalize_company_name(company_name),
+                }
+            )
 
         total_hits = data.get("hits", {}).get("total", {})
-        total_count = total_hits.get("value", 0) if isinstance(total_hits, dict) else total_hits
+        total_count = (
+            total_hits.get("value", 0) if isinstance(total_hits, dict) else total_hits
+        )
         offset += page_size
 
         if offset >= total_count or offset >= 10000:  # ES hard limit

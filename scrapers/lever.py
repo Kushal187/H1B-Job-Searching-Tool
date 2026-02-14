@@ -4,16 +4,76 @@ Queries the public Lever Postings API for open positions at a company,
 saves the raw JSON response, and inserts job listings into the database.
 """
 
-import json
-import os
-import time
 from datetime import datetime, timezone
 
-import requests
-
 import config
+from scrapers.base import BaseScraper
 from scrapers.location_filter import is_usa_location
 from scrapers.title_filter import is_target_role
+
+
+class LeverScraper(BaseScraper):
+    """Lever-specific field mappings and filters."""
+
+    ats_name = "lever"
+    board_url_template = "https://jobs.lever.co/{slug}"
+
+    def get_api_url(self, normalized: str) -> str:
+        return config.LEVER_API_URL.format(company=normalized)
+
+    def extract_all_jobs(self, response_json) -> list[dict]:
+        # Lever returns the job list directly (a JSON array, not an object).
+        return response_json if isinstance(response_json, list) else []
+
+    def is_job_relevant(self, job: dict) -> bool:
+        categories = job.get("categories") or {}
+        location_str = (
+            categories.get("location", "")
+            if isinstance(categories, dict)
+            else ""
+        )
+        return is_usa_location(location_str) and is_target_role(
+            job.get("text", "")
+        )
+
+    def wrap_for_save(self, jobs: list[dict]) -> list:
+        # Lever data is saved as a plain JSON array.
+        return jobs
+
+    def extract_job_fields(self, job: dict) -> dict:
+        categories = job.get("categories", {})
+        department = (
+            categories.get("department", "")
+            if isinstance(categories, dict)
+            else ""
+        )
+        location = (
+            categories.get("location", "")
+            if isinstance(categories, dict)
+            else ""
+        )
+
+        # Lever provides createdAt as epoch milliseconds
+        created_ms = job.get("createdAt")
+        if created_ms and isinstance(created_ms, (int, float)):
+            posted_at = datetime.fromtimestamp(
+                created_ms / 1000, tz=timezone.utc
+            ).isoformat()
+        else:
+            posted_at = ""
+
+        return {
+            "title": job.get("text", ""),
+            "location": location,
+            "department": department,
+            "job_url": job.get("hostedUrl", ""),
+            "posted_at": posted_at,
+        }
+
+
+# ── Module-level convenience function (backward-compatible API) ──────────
+
+_scraper = LeverScraper()
 
 
 def scrape_lever(
@@ -25,182 +85,13 @@ def scrape_lever(
     company_id: int | None = None,
     db_conn=None,
 ) -> dict | None:
-    """Query Lever API for a company's open jobs.
-
-    Args:
-        company_name: Original company name for display.
-        normalized: Normalized slug used as Lever board name.
-        output_dir: Base directory for saving JSON output.
-        delay: Seconds to wait after the request (rate limiting).
-        save_to_db: Whether to insert job records into the database.
-        company_id: matched_companies.id for DB foreign key.
-        db_conn: Optional database connection (for thread-safe writes).
-
-    Returns:
-        Metadata dict if jobs found, None otherwise.
-    """
-    url = config.LEVER_API_URL.format(company=normalized)
-
-    try:
-        resp = requests.get(url, timeout=config.SCRAPE_TIMEOUT)
-        if resp.status_code == 200:
-            all_data = resp.json()
-
-            # Filter to USA-only, entry-level target roles
-            data = [
-                j for j in all_data
-                if is_usa_location(
-                    (j.get("categories") or {}).get("location", "")
-                    if isinstance(j.get("categories"), dict)
-                    else ""
-                )
-                and is_target_role(j.get("text", ""))
-            ]
-
-            scraped_at = datetime.now(timezone.utc).isoformat()
-
-            if data:
-                # Save to filesystem
-                company_dir = os.path.join(output_dir, normalized)
-                os.makedirs(company_dir, exist_ok=True)
-
-                with open(os.path.join(company_dir, "jobs.json"), "w") as f:
-                    json.dump(data, f, indent=2)
-
-                metadata = {
-                    "original_name": company_name,
-                    "normalized_name": normalized,
-                    "job_count": len(data),
-                    "ats": "lever",
-                    "url": f"https://jobs.lever.co/{normalized}",
-                    "scraped_at": scraped_at,
-                }
-                with open(os.path.join(company_dir, "metadata.json"), "w") as f:
-                    json.dump(metadata, f, indent=2)
-
-                # Insert into database (upsert — skip existing job URLs)
-                if save_to_db:
-                    new_count = _upsert_jobs(
-                        company_name, normalized, data, scraped_at, company_id, db_conn,
-                    )
-                    metadata["new_job_count"] = new_count
-                    # Mark jobs not seen in this scrape as inactive
-                    _deactivate_stale_jobs(company_id, scraped_at, db_conn)
-
-                return metadata
-
-            # Company uses Lever but no matching jobs after filtering
-            if save_to_db and company_id:
-                _deactivate_stale_jobs(company_id, scraped_at, db_conn)
-            return {
-                "original_name": company_name,
-                "normalized_name": normalized,
-                "job_count": 0,
-                "total_before_filter": len(all_data),
-                "ats": "lever",
-                "url": f"https://jobs.lever.co/{normalized}",
-                "scraped_at": scraped_at,
-            }
-        return None
-    except Exception as e:
-        print(f"  Error scraping Lever for {normalized}: {e}")
-        return None
-    finally:
-        time.sleep(delay)
-
-
-def _upsert_jobs(
-    company_name: str,
-    normalized: str,
-    jobs: list[dict],
-    scraped_at: str,
-    company_id: int | None,
-    db_conn=None,
-) -> int:
-    """Insert new Lever job listings, skip duplicates by job_url.
-
-    Returns:
-        Number of newly inserted jobs.
-    """
-    from db import database
-
-    upsert_sql = """
-        INSERT INTO job_listings
-            (company_id, company_name, ats_system, job_title, job_location,
-             job_url, department, scraped_at, first_seen_at, last_seen_at,
-             posted_at, is_active, raw_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-        ON CONFLICT(job_url) DO UPDATE SET
-            scraped_at = excluded.scraped_at,
-            last_seen_at = excluded.last_seen_at,
-            is_active = 1,
-            raw_json = excluded.raw_json
-    """
-    check_sql = "SELECT 1 FROM job_listings WHERE job_url = ? LIMIT 1"
-
-    new_count = 0
-    for job in jobs:
-        categories = job.get("categories", {})
-        department = categories.get("department", "") if isinstance(categories, dict) else ""
-        location = categories.get("location", "") if isinstance(categories, dict) else ""
-        job_url = job.get("hostedUrl", "")
-
-        # Lever provides createdAt as epoch milliseconds
-        created_ms = job.get("createdAt")
-        if created_ms and isinstance(created_ms, (int, float)):
-            from datetime import datetime, timezone
-            posted_at = datetime.fromtimestamp(created_ms / 1000, tz=timezone.utc).isoformat()
-        else:
-            posted_at = ""
-
-        params = (
-            company_id,
-            company_name,
-            "lever",
-            job.get("text", ""),
-            location,
-            job_url,
-            department,
-            scraped_at,
-            scraped_at,  # first_seen_at (only set on initial insert)
-            scraped_at,  # last_seen_at (updated on every upsert)
-            posted_at,
-            json.dumps(job),
-        )
-
-        try:
-            if db_conn is not None:
-                exists = db_conn.execute(check_sql, (job_url,)).fetchone()
-                db_conn.execute(upsert_sql, params)
-                if not exists:
-                    new_count += 1
-            else:
-                with database.get_db() as conn:
-                    exists = conn.execute(check_sql, (job_url,)).fetchone()
-                    conn.execute(upsert_sql, params)
-                    if not exists:
-                        new_count += 1
-        except Exception as e:
-            print(f"    DB error inserting job {job_url}: {e}")
-
-    return new_count
-
-
-def _deactivate_stale_jobs(
-    company_id: int | None,
-    scraped_at: str,
-    db_conn=None,
-):
-    """Mark jobs as inactive if they weren't seen in the latest scrape."""
-    if not company_id:
-        return
-    from db import database
-
-    sql = """
-        UPDATE job_listings SET is_active = 0
-        WHERE company_id = ? AND ats_system = 'lever' AND last_seen_at < ?
-    """
-    if db_conn is not None:
-        db_conn.execute(sql, (company_id, scraped_at))
-    else:
-        database.execute(sql, (company_id, scraped_at))
+    """Query Lever API for a company's open jobs."""
+    return _scraper.scrape(
+        company_name,
+        normalized,
+        output_dir,
+        delay=delay,
+        save_to_db=save_to_db,
+        company_id=company_id,
+        db_conn=db_conn,
+    )

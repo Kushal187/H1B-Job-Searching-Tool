@@ -17,19 +17,21 @@ DB_PATH = os.path.join(DATA_DIR, "h1b_jobs.db")
 
 # ─── SEC EDGAR Configuration ─────────────────────────────────────────────────
 
-SEC_USER_AGENT = "H1BJobTool contact@example.com"
+SEC_USER_AGENT = os.environ.get("SEC_USER_AGENT", "H1BJobTool contact@example.com")
 
 # Quarterly bulk data sets (tab-delimited ZIPs, ~3MB each)
 SEC_BULK_BASE_URL = "https://www.sec.gov/files/structureddata/data/form-d-data-sets"
 SEC_QUARTERS = []
 for year in [2024, 2025]:
     for quarter in [1, 2, 3, 4]:
-        SEC_QUARTERS.append({
-            "year": year,
-            "quarter": quarter,
-            "url": f"{SEC_BULK_BASE_URL}/{year}q{quarter}_d.zip",
-            "filename": f"{year}q{quarter}_d.zip",
-        })
+        SEC_QUARTERS.append(
+            {
+                "year": year,
+                "quarter": quarter,
+                "url": f"{SEC_BULK_BASE_URL}/{year}q{quarter}_d.zip",
+                "filename": f"{year}q{quarter}_d.zip",
+            }
+        )
 
 # EFTS search API for 2026 Q1 gap (recent filings not yet in bulk data)
 SEC_EFTS_BASE_URL = "https://efts.sec.gov/LATEST/search-index"
@@ -85,6 +87,10 @@ LEVER_API_URL = "https://api.lever.co/v0/postings/{company}"
 ASHBY_API_URL = "https://api.ashbyhq.com/posting-api/job-board/{company}"
 SCRAPE_DELAY = 0.15  # seconds between API requests
 SCRAPE_TIMEOUT = 10  # request timeout in seconds
+SCRAPE_MAX_RETRIES = 3  # retries for transient HTTP errors (429, 5xx, timeout)
+SCRAPE_RETRY_BACKOFF = 1.0  # base seconds for exponential backoff (1s, 2s, 4s)
+SCRAPE_CIRCUIT_BREAKER_THRESHOLD = 5  # consecutive failures per ATS to trip breaker
+SCRAPE_CIRCUIT_BREAKER_COOLDOWN = 60  # seconds to skip requests when breaker is open
 
 # ─── Matching Configuration ──────────────────────────────────────────────────
 

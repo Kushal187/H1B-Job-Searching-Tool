@@ -132,12 +132,14 @@ def parse_lca_excel(path: str) -> list[dict]:
         return []
 
     # Aggregate by employer
-    employer_groups = defaultdict(lambda: {
-        "count": 0,
-        "city": None,
-        "state": None,
-        "naics_code": None,
-    })
+    employer_groups = defaultdict(
+        lambda: {
+            "count": 0,
+            "city": None,
+            "state": None,
+            "naics_code": None,
+        }
+    )
 
     city_col = "EMPLOYER_CITY" if "EMPLOYER_CITY" in df.columns else None
     state_col = "EMPLOYER_STATE" if "EMPLOYER_STATE" in df.columns else None
@@ -157,7 +159,9 @@ def parse_lca_excel(path: str) -> list[dict]:
         if not employer_groups[key]["naics_code"] and naics_col:
             val = row.get(naics_col)
             if pd.notna(val):
-                employer_groups[key]["naics_code"] = str(int(val)) if isinstance(val, float) else str(val).strip()
+                employer_groups[key]["naics_code"] = (
+                    str(int(val)) if isinstance(val, float) else str(val).strip()
+                )
 
     # Derive fiscal year from filename
     fy = "Unknown"
@@ -170,18 +174,20 @@ def parse_lca_excel(path: str) -> list[dict]:
     records = []
     for employer_name_upper, agg in employer_groups.items():
         # Use the original casing from the first occurrence
-        records.append({
-            "employer_name": employer_name_upper.title(),  # Title-case for readability
-            "city": agg["city"],
-            "state": agg["state"],
-            "naics_code": agg["naics_code"],
-            "visa_class": "H-1B",
-            "initial_approvals": agg["count"],  # LCA certifications as proxy
-            "continuing_approvals": 0,
-            "initial_denials": 0,
-            "fiscal_year": fy,
-            "normalized_name": normalize_company_name(employer_name_upper),
-        })
+        records.append(
+            {
+                "employer_name": employer_name_upper.title(),  # Title-case for readability
+                "city": agg["city"],
+                "state": agg["state"],
+                "naics_code": agg["naics_code"],
+                "visa_class": "H-1B",
+                "initial_approvals": agg["count"],  # LCA certifications as proxy
+                "continuing_approvals": 0,
+                "initial_denials": 0,
+                "fiscal_year": fy,
+                "normalized_name": normalize_company_name(employer_name_upper),
+            }
+        )
 
     print(f"    → {len(records)} unique employers from LCA data")
     return records
@@ -262,7 +268,11 @@ def parse_uscis_csv(path: str) -> list[dict]:
     col_map = {}
     for col in df.columns:
         cl = col.lower().strip()
-        if cl == "employer" or "employer" in cl and ("name" in cl or "petitioner" in cl):
+        if (
+            cl == "employer"
+            or "employer" in cl
+            and ("name" in cl or "petitioner" in cl)
+        ):
             col_map["employer_name"] = col
         elif cl in ("city",) or "city" in cl:
             col_map["city"] = col
@@ -292,15 +302,17 @@ def parse_uscis_csv(path: str) -> list[dict]:
         return []
 
     # Aggregate by employer (there may be multiple rows per employer)
-    employer_agg = defaultdict(lambda: {
-        "initial_approvals": 0,
-        "continuing_approvals": 0,
-        "initial_denials": 0,
-        "city": None,
-        "state": None,
-        "naics_code": None,
-        "fiscal_year": None,
-    })
+    employer_agg = defaultdict(
+        lambda: {
+            "initial_approvals": 0,
+            "continuing_approvals": 0,
+            "initial_denials": 0,
+            "city": None,
+            "state": None,
+            "naics_code": None,
+            "fiscal_year": None,
+        }
+    )
 
     for _, row in df.iterrows():
         name = str(row.get(employer_col, "")).strip()
@@ -335,11 +347,17 @@ def parse_uscis_csv(path: str) -> list[dict]:
         if not agg["naics_code"] and col_map.get("naics"):
             val = row.get(col_map["naics"])
             if pd.notna(val):
-                agg["naics_code"] = str(int(val)) if isinstance(val, float) else str(val).strip()
+                agg["naics_code"] = (
+                    str(int(val)) if isinstance(val, float) else str(val).strip()
+                )
         if not agg["fiscal_year"] and col_map.get("fiscal_year"):
             val = row.get(col_map["fiscal_year"])
             if pd.notna(val):
-                agg["fiscal_year"] = f"FY{int(val)}" if isinstance(val, (int, float)) else str(val).strip()
+                agg["fiscal_year"] = (
+                    f"FY{int(val)}"
+                    if isinstance(val, (int, float))
+                    else str(val).strip()
+                )
 
     # Derive fiscal year from filename if not in data
     default_fy = "Unknown"
@@ -351,18 +369,20 @@ def parse_uscis_csv(path: str) -> list[dict]:
 
     records = []
     for employer_upper, agg in employer_agg.items():
-        records.append({
-            "employer_name": employer_upper.title(),
-            "city": agg["city"],
-            "state": agg["state"],
-            "naics_code": agg["naics_code"],
-            "visa_class": "H-1B",
-            "initial_approvals": agg["initial_approvals"],
-            "continuing_approvals": agg["continuing_approvals"],
-            "initial_denials": agg["initial_denials"],
-            "fiscal_year": agg["fiscal_year"] or default_fy,
-            "normalized_name": normalize_company_name(employer_upper),
-        })
+        records.append(
+            {
+                "employer_name": employer_upper.title(),
+                "city": agg["city"],
+                "state": agg["state"],
+                "naics_code": agg["naics_code"],
+                "visa_class": "H-1B",
+                "initial_approvals": agg["initial_approvals"],
+                "continuing_approvals": agg["continuing_approvals"],
+                "initial_denials": agg["initial_denials"],
+                "fiscal_year": agg["fiscal_year"] or default_fy,
+                "normalized_name": normalize_company_name(employer_upper),
+            }
+        )
 
     print(f"    → {len(records)} unique employers from USCIS data")
     return records
@@ -371,7 +391,9 @@ def parse_uscis_csv(path: str) -> list[dict]:
 # ─── Merge & Load ────────────────────────────────────────────────────────────
 
 
-def _merge_employer_records(lca_records: list[dict], uscis_records: list[dict]) -> list[dict]:
+def _merge_employer_records(
+    lca_records: list[dict], uscis_records: list[dict]
+) -> list[dict]:
     """Merge LCA and USCIS records, preferring USCIS approval/denial counts.
 
     When the same employer appears in both sources, we keep USCIS
