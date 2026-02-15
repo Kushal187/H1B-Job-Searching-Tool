@@ -40,17 +40,31 @@ CREATE TABLE IF NOT EXISTS company_ats_status (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     company_id INTEGER REFERENCES matched_companies(id),
     normalized_name TEXT NOT NULL,
-    ats_system TEXT,         -- 'greenhouse', 'lever', 'ashby', or NULL (not found)
+    ats_system TEXT,         -- 'greenhouse', 'lever', 'ashby', 'workday', or NULL
     last_checked TEXT,       -- ISO timestamp of last check
     has_jobs INTEGER DEFAULT 0,  -- 1 if jobs were found on last check
     UNIQUE(normalized_name)
+);
+
+-- Workday board configuration (tenant/subdomain/board mappings)
+CREATE TABLE IF NOT EXISTS workday_boards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER REFERENCES matched_companies(id),
+    normalized_name TEXT NOT NULL,
+    tenant TEXT NOT NULL,
+    subdomain TEXT NOT NULL,
+    board TEXT NOT NULL,
+    url TEXT NOT NULL,
+    job_count INTEGER DEFAULT 0,
+    last_scraped TEXT,
+    UNIQUE(tenant, board)
 );
 
 CREATE TABLE IF NOT EXISTS job_listings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     company_id INTEGER REFERENCES matched_companies(id),
     company_name TEXT,
-    ats_system TEXT,  -- 'greenhouse', 'lever', or 'ashby'
+    ats_system TEXT,  -- 'greenhouse', 'lever', 'ashby', or 'workday'
     job_title TEXT,
     job_location TEXT,
     job_url TEXT UNIQUE,  -- unique constraint prevents duplicate jobs
@@ -71,3 +85,5 @@ CREATE INDEX IF NOT EXISTS idx_matched_priority ON matched_companies(priority_sc
 CREATE INDEX IF NOT EXISTS idx_jobs_company ON job_listings(company_id);
 CREATE INDEX IF NOT EXISTS idx_ats_status ON company_ats_status(ats_system);
 CREATE INDEX IF NOT EXISTS idx_ats_normalized ON company_ats_status(normalized_name);
+CREATE INDEX IF NOT EXISTS idx_workday_tenant ON workday_boards(tenant);
+CREATE INDEX IF NOT EXISTS idx_workday_normalized ON workday_boards(normalized_name);

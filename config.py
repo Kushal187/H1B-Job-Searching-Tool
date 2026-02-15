@@ -85,6 +85,11 @@ USCIS_LOCAL_FILES = [
 GREENHOUSE_API_URL = "https://boards-api.greenhouse.io/v1/boards/{company}/jobs"
 LEVER_API_URL = "https://api.lever.co/v0/postings/{company}"
 ASHBY_API_URL = "https://api.ashbyhq.com/posting-api/job-board/{company}"
+WORKDAY_DIR = os.path.join(JOBS_DATA_DIR, "workday")
+WORKDAY_PAGE_SIZE = 20  # jobs per API page (Workday default max)
+WORKDAY_MAX_PAGES = 100  # safety cap: 100 pages * 20 = 2000 jobs max per board
+WORKDAY_URLS_CSV = os.path.join(OUTPUT_DIR, "workday_urls.csv")
+
 SCRAPE_DELAY = 0.15  # seconds between API requests
 SCRAPE_TIMEOUT = 10  # request timeout in seconds
 SCRAPE_MAX_RETRIES = 3  # retries for transient HTTP errors (429, 5xx, timeout)

@@ -90,8 +90,6 @@ ROLE_PATTERNS: list[re.Pattern] = [
 
     # ── Solutions Engineering ─────────────────────────────────────────────
     re.compile(r"solutions\s+engineer", re.IGNORECASE),
-    re.compile(r"solutions\s+architect", re.IGNORECASE),
-    re.compile(r"solutions\s+consultant", re.IGNORECASE),
     re.compile(r"integration\s+engineer", re.IGNORECASE),
 
     # ── Product Management ────────────────────────────────────────────────
@@ -99,6 +97,12 @@ ROLE_PATTERNS: list[re.Pattern] = [
     re.compile(r"\bapm\b", re.IGNORECASE),                     # Associate Product Manager
     re.compile(r"technical\s+program\s+manager", re.IGNORECASE),
     re.compile(r"\btpm\b", re.IGNORECASE),                     # TPM
+    
+    # ── Rotational / Special Programs ─────────────────────────────────────
+    re.compile(r"production\s+engineer", re.IGNORECASE),       # Meta new-grad SWE title
+    re.compile(r"resident\s+engineer", re.IGNORECASE),         # Google rotational program
+    re.compile(r"rotation(?:al)?\s+engineer", re.IGNORECASE),  # various rotational programs
+
 
     # ── Other Engineering ─────────────────────────────────────────────────
     re.compile(r"database\s+engineer", re.IGNORECASE),
@@ -121,12 +125,15 @@ SENIOR_PATTERNS: list[re.Pattern] = [
     re.compile(r"\bleader\b", re.IGNORECASE),                  # "Engineering Leader"
     re.compile(r"\bhead\b", re.IGNORECASE),
     re.compile(r"\bvp\b", re.IGNORECASE),
+    re.compile(r"\barchitect\b", re.IGNORECASE),
+    re.compile(r"\bengineer\s+manager\b", re.IGNORECASE),
     re.compile(r"\bvice\s+president\b", re.IGNORECASE),
     re.compile(r"\bintern\b", re.IGNORECASE),                  # internships
     re.compile(r"\bphd\b", re.IGNORECASE),                     # PhD-specific roles
     re.compile(r"\bii\b", re.IGNORECASE),                      # Level II / Engineer II
     re.compile(r"\biii\b", re.IGNORECASE),                     # Level III
-    re.compile(r"\b[2-9]\b", re.IGNORECASE),                   # Level 2+ (but not 1)
+    re.compile(r"\b[2-9]\b", re.IGNORECASE),    
+    re.compile(r"\bdistinguished\b", re.IGNORECASE),    # Distinguished Engineer
     # Management titles (but NOT "Product Manager" or "Program Manager" — those are roles)
     re.compile(r"engineering\s+manager", re.IGNORECASE),       # "Software Engineering Manager"
     re.compile(r"^Manager[,\s]", re.IGNORECASE),               # "Manager, Software Engineering" (at start)
@@ -137,7 +144,7 @@ SENIOR_PATTERNS: list[re.Pattern] = [
 # Strong signals override seniority keywords; weak signals do not.
 
 STRONG_ENTRY_PATTERN: re.Pattern = re.compile(
-    r"new\s*grad|entry[\s\-]?level|\bjunior\b",
+    r"new\s*grad(?:uate)?|university\s+grad(?:uate)?|\bgraduate\b|entry[\s\-]?level|\bjunior\b",
     re.IGNORECASE,
 )
 

@@ -4,7 +4,7 @@
 CLI with subcommands for each phase of the pipeline:
   collect   — Phase 1: Download and parse SEC Form D + H1B/LCA data
   match     — Phase 2: Normalize names, fuzzy-match, and score companies
-  scrape    — Phase 3: Scrape Greenhouse and Lever for open jobs
+  scrape    — Phase 3: Scrape Greenhouse, Lever, Ashby, and Workday for open jobs
   export    — Export results to CSV and JSON
   run-all   — Run all phases end-to-end
 
@@ -57,8 +57,21 @@ def cmd_collect(args):
 
     h1b_count = load_h1b()
 
+    # Workday board import
+    print("\n--- Workday Board Import ---")
+    if os.path.exists(config.WORKDAY_URLS_CSV):
+        from collectors.workday_urls import import_to_db as import_workday
+
+        wd_count = import_workday()
+    else:
+        wd_count = 0
+        print(f"  No Workday CSV found at {config.WORKDAY_URLS_CSV} (skipping)")
+
     print("\n" + "=" * 60)
-    print(f"Collection complete: {sec_count} SEC records, {h1b_count} H1B records")
+    print(
+        f"Collection complete: {sec_count} SEC records, {h1b_count} H1B records, "
+        f"{wd_count} Workday boards"
+    )
     print("=" * 60)
 
 
@@ -99,14 +112,17 @@ def _scrape_one_company(
     lever_dir: str,
     ashby_dir: str,
     ats_filter: set[str] | None = None,
+    workday_dir: str | None = None,
+    workday_boards: dict | None = None,
 ) -> dict:
     """Scrape a single company on the requested ATS platforms. Thread-safe.
 
     Args:
         company: Row from matched_companies.
-        gh_dir / lever_dir / ashby_dir: Output directories.
+        gh_dir / lever_dir / ashby_dir / workday_dir: Output directories.
         ats_filter: If set, only try these ATS systems (e.g. {"ashby"}).
                     None means try all.
+        workday_boards: Dict mapping company_id -> workday board config.
 
     Returns a result dict with keys:
       name, normalized, ats, job_count, new_job_count, status
@@ -141,6 +157,25 @@ def _scrape_one_company(
     # Try each ATS in turn.  ATSUnavailableError (transient failure / circuit
     # breaker) is caught per-ATS so we still try the remaining platforms.
     # The flag prevents _update_ats_status from falsely caching "not found".
+
+    # Try Workday first if the company has a known board
+    if ats_filter is None or "workday" in ats_filter:
+        wb = (workday_boards or {}).get(cid)
+        if wb and workday_dir:
+            try:
+                from scrapers.workday import scrape_workday
+
+                wd = scrape_workday(
+                    name, norm, workday_dir, company_id=cid,
+                    tenant=wb["tenant"],
+                    subdomain=wb["subdomain"],
+                    board=wb["board"],
+                )
+                if wd is not None:
+                    _fill(result, "workday", wd)
+                    return result
+            except ATSUnavailableError:
+                result["had_transient_errors"] = True
 
     # Try Greenhouse
     if ats_filter is None or "greenhouse" in ats_filter:
@@ -242,7 +277,7 @@ def parse_ats_filter(ats_raw: str | None) -> set[str] | None:
     if not ats_raw:
         return None
     ats_filter = {a.strip().lower() for a in ats_raw.split(",")}
-    valid = {"greenhouse", "lever", "ashby"}
+    valid = {"greenhouse", "lever", "ashby", "workday"}
     unknown = ats_filter - valid
     if unknown:
         raise ValueError(f"Unknown ATS systems: {unknown}. Valid: {valid}")
@@ -329,12 +364,33 @@ def run_scrape(
     database.init_db()
 
     companies = get_companies_to_scrape(mode, ats_filter, limit)
+
+    # If Workday is in scope, also include companies from workday_boards
+    # that might not be in matched_companies yet (or not in the initial query).
+    workday_boards = _load_workday_boards(ats_filter)
+    if workday_boards and mode == "monitor":
+        existing_ids = {c["id"] for c in companies}
+        # Add Workday companies that aren't already in the list
+        wb_company_ids = [
+            cid for cid in workday_boards if cid and cid not in existing_ids
+        ]
+        if wb_company_ids:
+            placeholders = ",".join(["?"] * len(wb_company_ids))
+            extra = database.query(
+                f"SELECT id, company_name, normalized_name, priority_score "
+                f"FROM matched_companies WHERE id IN ({placeholders}) "
+                f"ORDER BY priority_score DESC",
+                tuple(wb_company_ids),
+            )
+            companies.extend(extra)
+
     total = len(companies)
 
     stats = {
         "greenhouse": 0,
         "lever": 0,
         "ashby": 0,
+        "workday": 0,
         "ats_no_match": 0,
         "not_found": 0,
         "total_jobs": 0,
@@ -352,6 +408,7 @@ def run_scrape(
     os.makedirs(config.GREENHOUSE_DIR, exist_ok=True)
     os.makedirs(config.LEVER_DIR, exist_ok=True)
     os.makedirs(config.ASHBY_DIR, exist_ok=True)
+    os.makedirs(config.WORKDAY_DIR, exist_ok=True)
 
     start_time = time.time()
     completed = 0
@@ -363,6 +420,8 @@ def run_scrape(
             config.LEVER_DIR,
             config.ASHBY_DIR,
             ats_filter=ats_filter,
+            workday_dir=config.WORKDAY_DIR,
+            workday_boards=workday_boards,
         )
         _update_ats_status(result, ats_filter=ats_filter)
         return result
@@ -403,7 +462,7 @@ def run_scrape(
 
 
 def cmd_scrape(args):
-    """Scrape Greenhouse, Lever, and Ashby for open jobs at matched companies."""
+    """Scrape Greenhouse, Lever, Ashby, and Workday for open jobs at matched companies."""
     mode = getattr(args, "mode", "monitor")
     workers = getattr(args, "workers", 1)
     limit = getattr(args, "limit", None)
@@ -484,16 +543,35 @@ def _print_progress(i: int, total: int, result: dict, start_time: float):
             )
 
 
+def _load_workday_boards(ats_filter: set[str] | None = None) -> dict:
+    """Load Workday board configs from the database.
+
+    Returns a dict mapping company_id -> {tenant, subdomain, board}.
+    Returns empty dict if Workday is excluded by the ATS filter.
+    """
+    if ats_filter and "workday" not in ats_filter:
+        return {}
+
+    rows = database.query(
+        "SELECT company_id, tenant, subdomain, board FROM workday_boards "
+        "WHERE company_id IS NOT NULL"
+    )
+    return {
+        r["company_id"]: {
+            "tenant": r["tenant"],
+            "subdomain": r["subdomain"],
+            "board": r["board"],
+        }
+        for r in rows
+    }
+
+
 def _tally_stats(stats: dict, result: dict):
     """Accumulate scraping statistics."""
     if result["status"] == "found":
         ats = result["ats"]
-        if ats == "greenhouse":
-            stats["greenhouse"] += 1
-        elif ats == "lever":
-            stats["lever"] += 1
-        elif ats == "ashby":
-            stats["ashby"] += 1
+        if ats in stats:
+            stats[ats] += 1
         stats["total_jobs"] += result["job_count"]
         stats["new_jobs"] += result.get("new_job_count", 0)
     elif result["status"] == "ats_no_match":
@@ -507,7 +585,9 @@ def _print_summary(stats: dict, total: int, elapsed: float):
     minutes = int(elapsed // 60)
     seconds = int(elapsed % 60)
 
-    found = stats["greenhouse"] + stats["lever"] + stats["ashby"]
+    found = (
+        stats["greenhouse"] + stats["lever"] + stats["ashby"] + stats["workday"]
+    )
     print(f"\n{'=' * 60}")
     print(f"Scraping complete in {minutes}m {seconds}s")
     print(f"{'=' * 60}")
@@ -515,6 +595,7 @@ def _print_summary(stats: dict, total: int, elapsed: float):
     print(f"  Greenhouse matches:  {stats['greenhouse']:,}")
     print(f"  Lever matches:       {stats['lever']:,}")
     print(f"  Ashby matches:       {stats['ashby']:,}")
+    print(f"  Workday matches:     {stats['workday']:,}")
     print(f"  ATS found, 0 match:  {stats['ats_no_match']:,}")
     print(f"  Not on any ATS:      {stats['not_found']:,}")
     print(
@@ -768,6 +849,7 @@ Examples:
   python pipeline.py scrape --mode monitor           Daily run: re-check known ATS companies
   python pipeline.py scrape --mode discovery --ats ashby -w 15   Discover Ashby boards only
   python pipeline.py scrape --mode monitor --ats greenhouse,lever   Monitor Greenhouse + Lever only
+  python pipeline.py scrape --mode monitor --ats workday -w 5       Scrape Workday boards only
   python pipeline.py scrape --mode discovery --limit 5000 -w 10   Discovery with limit
   python pipeline.py export                          Export results to CSV/JSON
   python pipeline.py run-all --mode monitor          Run full pipeline with monitoring scrape
@@ -813,7 +895,7 @@ Examples:
         "--ats",
         type=str,
         default=None,
-        help="Comma-separated ATS systems to check (greenhouse,lever,ashby). Default: all",
+        help="Comma-separated ATS systems to check (greenhouse,lever,ashby,workday). Default: all",
     )
     sub_scrape.set_defaults(func=cmd_scrape)
 
@@ -846,7 +928,7 @@ Examples:
         "--ats",
         type=str,
         default=None,
-        help="Comma-separated ATS systems to check (greenhouse,lever,ashby). Default: all",
+        help="Comma-separated ATS systems to check (greenhouse,lever,ashby,workday). Default: all",
     )
     sub_all.set_defaults(func=cmd_run_all)
 

@@ -493,6 +493,7 @@ async def admin_scrape(request: Request):
             "greenhouse": 0,
             "lever": 0,
             "ashby": 0,
+            "workday": 0,
             "not_found": 0,
             "total_jobs": 0,
             "new_jobs": 0,

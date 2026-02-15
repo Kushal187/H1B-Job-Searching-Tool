@@ -68,6 +68,21 @@ def _migrate():
         "CREATE INDEX IF NOT EXISTS idx_jobs_is_active ON job_listings(is_active)",
         # Backfill last_seen_at from scraped_at for existing rows
         "UPDATE job_listings SET last_seen_at = scraped_at WHERE last_seen_at IS NULL",
+        # Workday boards table (tenant/subdomain/board config for Workday scraper)
+        """CREATE TABLE IF NOT EXISTS workday_boards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER REFERENCES matched_companies(id),
+            normalized_name TEXT NOT NULL,
+            tenant TEXT NOT NULL,
+            subdomain TEXT NOT NULL,
+            board TEXT NOT NULL,
+            url TEXT NOT NULL,
+            job_count INTEGER DEFAULT 0,
+            last_scraped TEXT,
+            UNIQUE(tenant, board)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_workday_tenant ON workday_boards(tenant)",
+        "CREATE INDEX IF NOT EXISTS idx_workday_normalized ON workday_boards(normalized_name)",
     ]
     with get_db() as conn:
         for sql in migrations:

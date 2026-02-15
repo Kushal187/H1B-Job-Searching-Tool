@@ -136,9 +136,11 @@
                 <option value="greenhouse">Greenhouse</option>
                 <option value="lever">Lever</option>
                 <option value="ashby">Ashby</option>
+                <option value="workday">Workday</option>
                 <option value="greenhouse,lever">Greenhouse + Lever</option>
                 <option value="greenhouse,ashby">Greenhouse + Ashby</option>
                 <option value="lever,ashby">Lever + Ashby</option>
+                <option value="greenhouse,lever,ashby">GH + Lever + Ashby (no Workday)</option>
               </select>
             </div>
             <div>
@@ -377,7 +379,7 @@
         const maxJobs = Math.max(...s.ats_breakdown.map(a => a.job_count));
         atsDiv.innerHTML = s.ats_breakdown.map(a => {
           const pct = maxJobs > 0 ? (a.job_count / maxJobs * 100) : 0;
-          const colors = { greenhouse: 'bg-green-500', lever: 'bg-blue-500', ashby: 'bg-purple-500' };
+          const colors = { greenhouse: 'bg-green-500', lever: 'bg-blue-500', ashby: 'bg-purple-500', workday: 'bg-orange-500' };
           return `
             <div>
               <div class="flex items-center justify-between text-xs mb-1">
@@ -482,7 +484,7 @@
       // Live stats
       const st = s.stats || {};
       document.getElementById('scrape-stats-live').innerHTML =
-        `GH: ${st.greenhouse || 0} | Lever: ${st.lever || 0} | Ashby: ${st.ashby || 0} | ` +
+        `GH: ${st.greenhouse || 0} | Lever: ${st.lever || 0} | Ashby: ${st.ashby || 0} | WD: ${st.workday || 0} | ` +
         `Jobs: ${(st.total_jobs || 0).toLocaleString()} | New: ${st.new_jobs || 0}`;
 
       // Update log (use textContent to prevent XSS from company names)
