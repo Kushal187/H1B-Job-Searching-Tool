@@ -1,0 +1,72 @@
+name: Monitor Jobs (Supabase)
+
+on:
+  schedule:
+    - cron: "0 */6 * * *" # every 6 hours (UTC)
+  workflow_dispatch:
+
+concurrency:
+  group: monitor-jobs-supabase
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Resolve DATABASE_URL
+        run: |
+          if [ -n "${SUPABASE_DB_URL}" ]; then
+            echo "DATABASE_URL=${SUPABASE_DB_URL}" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          if [ -n "${SUPABASE_PROJECT_REF}" ] && [ -n "${SUPABASE_DB_PASSWORD}" ]; then
+            echo "DATABASE_URL=postgresql://postgres:${SUPABASE_DB_PASSWORD}@db.${SUPABASE_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          echo "Provide either SUPABASE_DB_URL, or SUPABASE_PROJECT_REF + SUPABASE_DB_PASSWORD."
+          exit 1
+
+      - name: Validate DATABASE_URL
+        run: |
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "DATABASE_URL was not resolved."
+            exit 1
+          fi
+
+      - name: Ensure schema exists
+        run: |
+          python - <<'PY'
+          from db import database
+          database.init_db()
+          print("Schema initialized")
+          PY
+
+      - name: Run monitor scrape
+        run: |
+          python pipeline.py scrape --mode monitor -w 10
+          python pipeline.py export
+
+      - name: Upload exports
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitor-output
+          path: output/

@@ -434,13 +434,8 @@ async def admin_stats():
         )
         stats["age_distribution"] = dict(age_rows[0]) if age_rows else {}
 
-        # Database file size
-        if os.path.exists(config.DB_PATH):
-            stats["db_size_mb"] = round(
-                os.path.getsize(config.DB_PATH) / (1024 * 1024), 2
-            )
-        else:
-            stats["db_size_mb"] = 0
+        # Database size (SQLite file or Postgres database size)
+        stats["db_size_mb"] = database.get_db_size_mb()
 
         # Last scrape time (most recent last_seen_at)
         last_scrape = database.query(
@@ -692,6 +687,14 @@ async def admin_export():
 @app.post("/api/admin/vacuum")
 async def admin_vacuum():
     """Vacuum the SQLite database to reclaim space."""
+    if database.using_postgres():
+        return {
+            "error": (
+                "VACUUM from app is disabled for Postgres/Supabase in this project. "
+                "Use Supabase maintenance tools instead."
+            )
+        }
+
     try:
         before_size = (
             os.path.getsize(config.DB_PATH) if os.path.exists(config.DB_PATH) else 0
