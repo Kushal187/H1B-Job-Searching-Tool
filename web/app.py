@@ -459,6 +459,16 @@ async def admin_scrape(request: Request):
     """Trigger a background scrape operation."""
     global _scrape_status
 
+    # Vercel serverless functions are not suitable for long-running scraper jobs.
+    # Use GitHub Actions workflow_dispatch for manual runs in hosted production.
+    if os.environ.get("VERCEL") and database.using_postgres():
+        return {
+            "error": (
+                "Scrape from admin is disabled on Vercel. "
+                "Run the 'Monitor Jobs (Supabase)' GitHub Actions workflow manually."
+            )
+        }
+
     if _scrape_status["running"]:
         return {"error": "A scrape is already running", "status": _scrape_status}
 

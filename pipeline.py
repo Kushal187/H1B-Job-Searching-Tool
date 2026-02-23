@@ -361,7 +361,9 @@ def run_scrape(
         ``ats_no_match``, ``not_found``, ``total_jobs``, ``new_jobs``,
         ``total``, ``elapsed``.
     """
-    database.init_db()
+    # SQLite needs local schema init; Postgres schema is managed separately.
+    if not database.using_postgres():
+        database.init_db()
 
     companies = get_companies_to_scrape(mode, ats_filter, limit)
 

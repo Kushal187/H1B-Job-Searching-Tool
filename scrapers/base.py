@@ -327,6 +327,14 @@ class BaseScraper(ABC):
         """
         from db import database
 
+        # Reuse one connection for the whole company/ATS upsert to avoid
+        # opening a new DB connection per job row.
+        if db_conn is None:
+            with database.get_db() as conn:
+                return self._upsert_jobs(
+                    company_name, jobs, scraped_at, company_id, db_conn=conn
+                )
+
         upsert_sql = """
             INSERT INTO job_listings
                 (company_id, company_name, ats_system, job_title, job_location,
@@ -362,17 +370,10 @@ class BaseScraper(ABC):
             )
 
             try:
-                if db_conn is not None:
-                    exists = db_conn.execute(check_sql, (job_url,)).fetchone()
-                    db_conn.execute(upsert_sql, params)
-                    if not exists:
-                        new_count += 1
-                else:
-                    with database.get_db() as conn:
-                        exists = conn.execute(check_sql, (job_url,)).fetchone()
-                        conn.execute(upsert_sql, params)
-                        if not exists:
-                            new_count += 1
+                exists = db_conn.execute(check_sql, (job_url,)).fetchone()
+                db_conn.execute(upsert_sql, params)
+                if not exists:
+                    new_count += 1
             except Exception as e:
                 print(f"    DB error inserting job {job_url}: {e}")
 
