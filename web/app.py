@@ -1,5 +1,7 @@
 """FastAPI web UI for browsing H1B job listings."""
 
+import base64
+import hmac
 import os
 import sys
 import threading
@@ -7,7 +9,7 @@ from datetime import datetime, timezone
 from urllib.parse import unquote
 
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 
 # Allow imports from project root
@@ -20,6 +22,61 @@ app = FastAPI(title="H1B Job Search")
 templates = Jinja2Templates(
     directory=os.path.join(os.path.dirname(__file__), "templates")
 )
+
+
+def _is_truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _admin_scope(path: str) -> bool:
+    return path == "/admin" or path.startswith("/api/admin")
+
+
+def _admin_auth_ok(request: Request) -> bool:
+    username = os.environ.get("ADMIN_USERNAME", "")
+    password = os.environ.get("ADMIN_PASSWORD", "")
+    if not username or not password:
+        return True  # No credentials configured -> open admin (dev default).
+
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.startswith("Basic "):
+        return False
+
+    token = auth_header[6:].strip()
+    try:
+        decoded = base64.b64decode(token).decode("utf-8")
+    except Exception:
+        return False
+
+    if ":" not in decoded:
+        return False
+    supplied_user, supplied_pass = decoded.split(":", 1)
+
+    return hmac.compare_digest(supplied_user, username) and hmac.compare_digest(
+        supplied_pass, password
+    )
+
+
+@app.middleware("http")
+async def admin_access_guard(request: Request, call_next):
+    path = request.url.path
+    if _admin_scope(path):
+        if _is_truthy(os.environ.get("ADMIN_DISABLED")):
+            if path.startswith("/api/admin"):
+                return JSONResponse({"error": "Not found"}, status_code=404)
+            return PlainTextResponse("Not found", status_code=404)
+
+        if not _admin_auth_ok(request):
+            headers = {"WWW-Authenticate": 'Basic realm="Admin"'}
+            if path.startswith("/api/admin"):
+                return JSONResponse(
+                    {"error": "Unauthorized"}, status_code=401, headers=headers
+                )
+            return PlainTextResponse(
+                "Unauthorized", status_code=401, headers=headers
+            )
+
+    return await call_next(request)
 
 
 @app.on_event("startup")

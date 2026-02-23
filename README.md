@@ -94,6 +94,16 @@ Notes:
 - On Vercel, avoid direct DB host (`db.<project-ref>.supabase.co:5432`) because it may resolve to IPv6 only.
   Use the Supabase "Connection pooling" URL from Project Settings -> Database -> Connect (typically `*.pooler.supabase.com`).
 
+### Admin route lock/disable (production)
+
+Admin routes are `/admin` and `/api/admin/*`.
+
+- To lock with Basic Auth, set both:
+  - `ADMIN_USERNAME`
+  - `ADMIN_PASSWORD`
+- To disable admin routes entirely, set:
+  - `ADMIN_DISABLED=true`
+
 ## GitHub Actions (every 6 hours)
 
 Workflow file: `.github/workflows/monitor-supabase.yml`
