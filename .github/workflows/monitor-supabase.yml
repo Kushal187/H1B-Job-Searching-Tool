@@ -4,6 +4,23 @@ on:
   schedule:
     - cron: "0 */6 * * *" # every 6 hours (UTC)
   workflow_dispatch:
+    inputs:
+      workers:
+        description: "Number of scrape workers"
+        required: false
+        default: "15"
+      ats:
+        description: "Optional ATS filter (comma-separated: greenhouse,lever,ashby,workday)"
+        required: false
+        default: ""
+      limit:
+        description: "Optional company limit"
+        required: false
+        default: ""
+      cleanup_days:
+        description: "Auto-remove jobs older than N days after scraping"
+        required: false
+        default: "30"
 
 concurrency:
   group: monitor-jobs-supabase
@@ -62,8 +79,50 @@ jobs:
 
       - name: Run monitor scrape
         run: |
-          python pipeline.py scrape --mode monitor -w 10
+          WORKERS="${{ github.event.inputs.workers }}"
+          ATS="${{ github.event.inputs.ats }}"
+          LIMIT="${{ github.event.inputs.limit }}"
+          CLEANUP_DAYS="${{ github.event.inputs.cleanup_days }}"
+
+          if [ -z "$WORKERS" ]; then WORKERS="15"; fi
+          if [ -z "$CLEANUP_DAYS" ]; then CLEANUP_DAYS="30"; fi
+
+          CMD=(python pipeline.py scrape --mode monitor -w "$WORKERS")
+          if [ -n "$ATS" ]; then CMD+=(--ats "$ATS"); fi
+          if [ -n "$LIMIT" ]; then CMD+=(--limit "$LIMIT"); fi
+
+          printf 'Running: %q ' "${CMD[@]}"
+          printf '\n'
+          "${CMD[@]}"
+
+          echo "Running cleanup for jobs older than ${CLEANUP_DAYS} days..."
+          python - <<'PY'
+          import os
+          from db import database
+
+          raw_days = (os.environ.get("CLEANUP_DAYS") or "").strip()
+          days = int(raw_days) if raw_days else 30
+          cutoff = f"-{days}"
+          posted_expr = "COALESCE(NULLIF(posted_at, ''), first_seen_at)"
+
+          rows = database.query(
+              f"SELECT COUNT(*) as cnt FROM job_listings "
+              f"WHERE {posted_expr} < datetime('now', ? || ' days')",
+              (cutoff,),
+          )
+          count = rows[0]["cnt"] if rows else 0
+          if count > 0:
+              database.execute(
+                  f"DELETE FROM job_listings "
+                  f"WHERE id IN (SELECT id FROM job_listings "
+                  f"WHERE {posted_expr} < datetime('now', ? || ' days'))",
+                  (cutoff,),
+              )
+          print(f'Cleanup deleted: {count}')
+          PY
           python pipeline.py export
+        env:
+          CLEANUP_DAYS: ${{ github.event.inputs.cleanup_days }}
 
       - name: Upload exports
         uses: actions/upload-artifact@v4
