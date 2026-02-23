@@ -770,7 +770,7 @@ def _export_summary_report():
         "FROM matched_companies mc "
         "LEFT JOIN job_listings jl ON jl.company_id = mc.id "
         "GROUP BY mc.id "
-        "HAVING open_jobs > 0 "
+        "HAVING COUNT(jl.id) > 0 "
         "ORDER BY mc.priority_score DESC LIMIT 25"
     )
 
