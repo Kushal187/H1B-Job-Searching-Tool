@@ -10,6 +10,7 @@ from urllib.parse import unquote
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 # Allow imports from project root
@@ -21,6 +22,11 @@ from db import database
 app = FastAPI(title="H1B Job Search")
 templates = Jinja2Templates(
     directory=os.path.join(os.path.dirname(__file__), "templates")
+)
+app.mount(
+    "/static",
+    StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")),
+    name="static",
 )
 
 
