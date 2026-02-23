@@ -400,9 +400,6 @@ def _postgres_migrations() -> list[str]:
         "CREATE INDEX IF NOT EXISTS idx_jobs_first_seen ON job_listings(first_seen_at)",
         "ALTER TABLE job_listings ADD COLUMN IF NOT EXISTS posted_at TEXT",
         "CREATE INDEX IF NOT EXISTS idx_jobs_posted_at ON job_listings(posted_at)",
-        """DELETE FROM matched_companies a USING matched_companies b
-           WHERE a.normalized_name = b.normalized_name
-             AND a.id < b.id""",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_matched_name_unique ON matched_companies(normalized_name)",
         "ALTER TABLE job_listings ADD COLUMN IF NOT EXISTS last_seen_at TEXT",
         "ALTER TABLE job_listings ADD COLUMN IF NOT EXISTS is_active INTEGER DEFAULT 1",

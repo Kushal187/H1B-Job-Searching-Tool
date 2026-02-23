@@ -24,7 +24,13 @@ templates = Jinja2Templates(
 
 @app.on_event("startup")
 def startup_init_db():
-    """Ensure database schema and migrations are applied on startup."""
+    """Initialize local SQLite schema on startup.
+
+    For Postgres/Supabase deployments (e.g. Vercel), skip automatic init/migrate
+    during request startup to avoid cold-start latency/timeouts.
+    """
+    if database.using_postgres():
+        return
     database.init_db()
 
 
