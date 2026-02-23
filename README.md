@@ -79,7 +79,7 @@ Use Vercel for the web app + GitHub Actions for 6-hour monitor scraping.
 1. Push this repo to GitHub.
 2. In Vercel, create a new project from this repo.
 3. In project environment variables, set:
-   - `DATABASE_URL` (Supabase Postgres URL)
+   - `DATABASE_URL` (Supabase Pooler URL)
 4. Deploy.
 
 This repo already includes:
@@ -91,6 +91,8 @@ Notes:
 
 - `SEC_USER_AGENT` is not needed for monitor-only runs.
 - Continue running scraping on GitHub Actions (`.github/workflows/monitor-supabase.yml`), not on Vercel serverless functions.
+- On Vercel, avoid direct DB host (`db.<project-ref>.supabase.co:5432`) because it may resolve to IPv6 only.
+  Use the Supabase "Connection pooling" URL from Project Settings -> Database -> Connect (typically `*.pooler.supabase.com`).
 
 ## GitHub Actions (every 6 hours)
 

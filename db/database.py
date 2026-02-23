@@ -36,7 +36,18 @@ def _require_psycopg():
 
 def _connect_postgres():
     _require_psycopg()
-    conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+    conninfo = DATABASE_URL
+    if conninfo and "sslmode=" not in conninfo:
+        sep = "&" if "?" in conninfo else "?"
+        conninfo = f"{conninfo}{sep}sslmode=require"
+
+    # Disable prepared statements by default for serverless/pooler compatibility.
+    conn = psycopg.connect(
+        conninfo,
+        row_factory=dict_row,
+        prepare_threshold=None,
+        connect_timeout=10,
+    )
     conn.execute("SET TIME ZONE 'UTC'")
     return conn
 
