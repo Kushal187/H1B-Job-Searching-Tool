@@ -398,14 +398,12 @@ class BaseScraper(ABC):
             return
         from db import database
 
-        sql = database.adapt_sql(
-            """
+        sql = """
             UPDATE job_listings SET is_active = 0
             WHERE company_id = ? AND ats_system = ? AND last_seen_at < ?
         """
-        )
         params = (company_id, self.ats_name, scraped_at)
         if db_conn is not None:
-            db_conn.execute(sql, params)
+            db_conn.execute(database.adapt_sql(sql), params)
         else:
             database.execute(sql, params)
