@@ -335,7 +335,8 @@ class BaseScraper(ABC):
                     company_name, jobs, scraped_at, company_id, db_conn=conn
                 )
 
-        upsert_sql = """
+        upsert_sql = database.adapt_sql(
+            """
             INSERT INTO job_listings
                 (company_id, company_name, ats_system, job_title, job_location,
                  job_url, department, scraped_at, first_seen_at, last_seen_at,
@@ -347,7 +348,10 @@ class BaseScraper(ABC):
                 is_active = 1,
                 raw_json = excluded.raw_json
         """
-        check_sql = "SELECT 1 FROM job_listings WHERE job_url = ? LIMIT 1"
+        )
+        check_sql = database.adapt_sql(
+            "SELECT 1 FROM job_listings WHERE job_url = ? LIMIT 1"
+        )
 
         new_count = 0
         for job in jobs:
@@ -394,10 +398,12 @@ class BaseScraper(ABC):
             return
         from db import database
 
-        sql = """
+        sql = database.adapt_sql(
+            """
             UPDATE job_listings SET is_active = 0
             WHERE company_id = ? AND ats_system = ? AND last_seen_at < ?
         """
+        )
         params = (company_id, self.ats_name, scraped_at)
         if db_conn is not None:
             db_conn.execute(sql, params)

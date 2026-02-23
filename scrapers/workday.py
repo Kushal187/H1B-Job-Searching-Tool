@@ -409,7 +409,8 @@ class WorkdayScraper(BaseScraper):
                     board=board,
                 )
 
-        upsert_sql = """
+        upsert_sql = database.adapt_sql(
+            """
             INSERT INTO job_listings
                 (company_id, company_name, ats_system, job_title, job_location,
                  job_url, department, scraped_at, first_seen_at, last_seen_at,
@@ -421,7 +422,10 @@ class WorkdayScraper(BaseScraper):
                 is_active = 1,
                 raw_json = excluded.raw_json
         """
-        check_sql = "SELECT 1 FROM job_listings WHERE job_url = ? LIMIT 1"
+        )
+        check_sql = database.adapt_sql(
+            "SELECT 1 FROM job_listings WHERE job_url = ? LIMIT 1"
+        )
 
         new_count = 0
         for job in jobs:

@@ -349,6 +349,11 @@ def _adapt_sql(sql: str) -> str:
     return sql
 
 
+def adapt_sql(sql: str) -> str:
+    """Public adapter for call sites executing SQL on raw connections."""
+    return _adapt_sql(sql)
+
+
 def _exec_script(conn, script: str):
     if using_postgres():
         for statement in _split_sql_statements(script):
