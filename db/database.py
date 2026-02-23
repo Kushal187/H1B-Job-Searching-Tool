@@ -188,7 +188,10 @@ def _normalize_params(params: tuple | list | Any) -> tuple:
 
 
 def _replace_qmark_placeholders(sql: str) -> str:
-    """Convert SQLite-style '?' placeholders to psycopg '%s' placeholders."""
+    """Convert SQLite-style '?' placeholders to psycopg '%s' placeholders.
+
+    Also escapes literal '%' characters as '%%' for psycopg's placeholder parser.
+    """
     out: list[str] = []
     i = 0
     n = len(sql)
@@ -197,21 +200,28 @@ def _replace_qmark_placeholders(sql: str) -> str:
     in_line_comment = False
     in_block_comment = False
 
+    def _append_source_char(ch: str):
+        # psycopg placeholder parser requires literal '%' to be escaped.
+        if ch == "%":
+            out.append("%%")
+        else:
+            out.append(ch)
+
     while i < n:
         ch = sql[i]
         nxt = sql[i + 1] if i + 1 < n else ""
 
         if in_line_comment:
-            out.append(ch)
+            _append_source_char(ch)
             if ch == "\n":
                 in_line_comment = False
             i += 1
             continue
 
         if in_block_comment:
-            out.append(ch)
+            _append_source_char(ch)
             if ch == "*" and nxt == "/":
-                out.append(nxt)
+                _append_source_char(nxt)
                 i += 2
                 in_block_comment = False
                 continue
@@ -219,9 +229,9 @@ def _replace_qmark_placeholders(sql: str) -> str:
             continue
 
         if in_single:
-            out.append(ch)
+            _append_source_char(ch)
             if ch == "'" and nxt == "'":
-                out.append(nxt)
+                _append_source_char(nxt)
                 i += 2
                 continue
             if ch == "'":
@@ -230,9 +240,9 @@ def _replace_qmark_placeholders(sql: str) -> str:
             continue
 
         if in_double:
-            out.append(ch)
+            _append_source_char(ch)
             if ch == '"' and nxt == '"':
-                out.append(nxt)
+                _append_source_char(nxt)
                 i += 2
                 continue
             if ch == '"':
@@ -241,27 +251,27 @@ def _replace_qmark_placeholders(sql: str) -> str:
             continue
 
         if ch == "-" and nxt == "-":
-            out.append(ch)
-            out.append(nxt)
+            _append_source_char(ch)
+            _append_source_char(nxt)
             i += 2
             in_line_comment = True
             continue
 
         if ch == "/" and nxt == "*":
-            out.append(ch)
-            out.append(nxt)
+            _append_source_char(ch)
+            _append_source_char(nxt)
             i += 2
             in_block_comment = True
             continue
 
         if ch == "'":
-            out.append(ch)
+            _append_source_char(ch)
             in_single = True
             i += 1
             continue
 
         if ch == '"':
-            out.append(ch)
+            _append_source_char(ch)
             in_double = True
             i += 1
             continue
@@ -269,7 +279,7 @@ def _replace_qmark_placeholders(sql: str) -> str:
         if ch == "?":
             out.append("%s")
         else:
-            out.append(ch)
+            _append_source_char(ch)
         i += 1
 
     return "".join(out)
