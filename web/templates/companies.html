@@ -5,20 +5,46 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Companies - H1B Job Search</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <script>
+    (function () {
+      try {
+        const savedTheme = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = { darkMode: 'class' };
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
   </style>
+  <link rel="stylesheet" href="/static/theme.css" />
 </head>
 <body class="bg-white text-gray-900 min-h-screen">
 
   <!-- Nav -->
   <nav class="border-b border-gray-200 px-6 py-3 flex items-center justify-between">
     <a href="/" class="text-lg font-semibold text-gray-900 hover:text-gray-700">H1B Job Search</a>
-    <div class="flex gap-6 text-sm">
-      <a href="/" class="text-gray-500 hover:text-gray-700">Jobs</a>
-      <a href="/companies" class="text-gray-900 font-medium border-b-2 border-gray-900 pb-0.5">Companies</a>
-      <a href="/admin" class="text-gray-500 hover:text-gray-700">Admin</a>
+    <div class="flex items-center gap-4">
+      <div class="flex gap-6 text-sm">
+        <a href="/" class="text-gray-500 hover:text-gray-700">Jobs</a>
+        <a href="/companies" class="text-gray-900 font-medium border-b-2 border-gray-900 pb-0.5">Companies</a>
+        <a href="/admin" class="text-gray-500 hover:text-gray-700">Admin</a>
+      </div>
+      <button id="theme-toggle" type="button" class="theme-toggle-btn" aria-label="Toggle dark mode" aria-pressed="false">
+        <svg class="theme-icon theme-icon-moon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646a9 9 0 1011.708 11.708z"></path>
+        </svg>
+        <svg class="theme-icon theme-icon-sun" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364 6.364l-1.414-1.414M7.05 7.05 5.636 5.636m12.728 0L16.95 7.05M7.05 16.95l-1.414 1.414M12 16a4 4 0 100-8 4 4 0 000 8z"></path>
+        </svg>
+      </button>
     </div>
   </nav>
 
@@ -121,6 +147,7 @@
 
   loadCompanies();
 </script>
+<script src="/static/theme.js"></script>
 
 </body>
 </html>

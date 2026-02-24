@@ -1,0 +1,268 @@
+html,
+body {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #374151;
+}
+
+.theme-toggle-btn:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.theme-toggle-btn:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.theme-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.theme-icon-sun {
+  display: none;
+}
+
+.dark .theme-toggle-btn {
+  border-color: #4b5563;
+  background: #111827;
+  color: #e5e7eb;
+}
+
+.dark .theme-toggle-btn:hover {
+  background: #1f2937;
+}
+
+.dark .theme-icon-sun {
+  display: block;
+}
+
+.dark .theme-icon-moon {
+  display: none;
+}
+
+.dark body {
+  background-color: #0b1220;
+  color: #e5e7eb;
+}
+
+.dark .bg-white {
+  background-color: #111827 !important;
+}
+
+.dark .bg-gray-50 {
+  background-color: #0f172a !important;
+}
+
+.dark .bg-gray-100 {
+  background-color: #1f2937 !important;
+}
+
+.dark .bg-gray-200 {
+  background-color: #374151 !important;
+}
+
+.dark .bg-gray-900 {
+  background-color: #334155 !important;
+}
+
+.dark .bg-amber-50 {
+  background-color: #422006 !important;
+}
+
+.dark .bg-amber-100 {
+  background-color: #5b2f0b !important;
+}
+
+.dark .bg-blue-50 {
+  background-color: #172554 !important;
+}
+
+.dark .bg-blue-100 {
+  background-color: #1e3a8a !important;
+}
+
+.dark .bg-green-50 {
+  background-color: #052e16 !important;
+}
+
+.dark .bg-green-100 {
+  background-color: #14532d !important;
+}
+
+.dark .bg-purple-50 {
+  background-color: #2e1065 !important;
+}
+
+.dark .bg-purple-100 {
+  background-color: #4c1d95 !important;
+}
+
+.dark .bg-red-50 {
+  background-color: #450a0a !important;
+}
+
+.dark .bg-red-100 {
+  background-color: #7f1d1d !important;
+}
+
+.dark .text-gray-900 {
+  color: #f9fafb !important;
+}
+
+.dark .text-gray-700 {
+  color: #e5e7eb !important;
+}
+
+.dark .text-gray-600 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+.dark .text-gray-400 {
+  color: #9ca3af !important;
+}
+
+.dark .text-gray-300 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-amber-600 {
+  color: #fbbf24 !important;
+}
+
+.dark .text-amber-700 {
+  color: #fcd34d !important;
+}
+
+.dark .text-blue-600 {
+  color: #93c5fd !important;
+}
+
+.dark .text-blue-700 {
+  color: #bfdbfe !important;
+}
+
+.dark .text-blue-800 {
+  color: #dbeafe !important;
+}
+
+.dark .text-green-600 {
+  color: #86efac !important;
+}
+
+.dark .text-green-700 {
+  color: #bbf7d0 !important;
+}
+
+.dark .text-purple-600 {
+  color: #d8b4fe !important;
+}
+
+.dark .text-red-500 {
+  color: #fca5a5 !important;
+}
+
+.dark .text-red-600 {
+  color: #f87171 !important;
+}
+
+.dark .border-gray-100 {
+  border-color: #374151 !important;
+}
+
+.dark .border-gray-200 {
+  border-color: #374151 !important;
+}
+
+.dark .border-gray-300 {
+  border-color: #4b5563 !important;
+}
+
+.dark .border-gray-400 {
+  border-color: #6b7280 !important;
+}
+
+.dark .border-gray-500 {
+  border-color: #6b7280 !important;
+}
+
+.dark .border-gray-900 {
+  border-color: #f3f4f6 !important;
+}
+
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-gray-100:hover {
+  background-color: #1f2937 !important;
+}
+
+.dark .hover\:bg-amber-100:hover {
+  background-color: #6b3b13 !important;
+}
+
+.dark .hover\:bg-blue-100:hover {
+  background-color: #1d4ed8 !important;
+}
+
+.dark .hover\:bg-green-100:hover {
+  background-color: #166534 !important;
+}
+
+.dark .hover\:bg-purple-100:hover {
+  background-color: #5b21b6 !important;
+}
+
+.dark .hover\:bg-red-100:hover {
+  background-color: #991b1b !important;
+}
+
+.dark .hover\:text-gray-700:hover,
+.dark .hover\:text-gray-600:hover {
+  color: #f3f4f6 !important;
+}
+
+.dark .hover\:text-blue-800:hover {
+  color: #dbeafe !important;
+}
+
+.dark .hover\:border-gray-300:hover,
+.dark .hover\:border-gray-400:hover {
+  border-color: #6b7280 !important;
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #111827;
+  color: #e5e7eb;
+  border-color: #4b5563;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #9ca3af;
+}
+
+.dark .job-new {
+  border-left-color: #60a5fa;
+  background: linear-gradient(90deg, #1e3a8a55 0%, #111827 45%);
+}
+
+.dark .job-recent {
+  border-left-color: #f59e0b;
+  background: linear-gradient(90deg, #78350f66 0%, #111827 45%);
+}
