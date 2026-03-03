@@ -121,6 +121,138 @@ _scrape_status = {
 # This avoids expensive json_extract() on raw_json at query time.
 POSTED_DATE_EXPR = "COALESCE(NULLIF(j.posted_at, ''), j.first_seen_at)"
 
+TEXT_SEARCH_FIELDS = (
+    "LOWER(COALESCE(j.job_title, ''))",
+    "LOWER(COALESCE(j.company_name, ''))",
+)
+
+JOB_PROFILE_TERMS: dict[str, dict[str, str | tuple[str, ...]]] = {
+    "new_grad_swe_plus": {
+        "label": "New Grad SWE+",
+        "description": (
+            "Software engineer, backend, full stack, AI/ML, and forward "
+            "deployed roles."
+        ),
+        "terms": (
+            "software engineer",
+            "software developer",
+            "swe",
+            "sde",
+            "backend engineer",
+            "backend developer",
+            "full stack",
+            "full-stack",
+            "fullstack",
+            "ai engineer",
+            "ai/ml engineer",
+            "applied ai",
+            "machine learning engineer",
+            "ml engineer",
+            "forward deployed",
+            "fde",
+            "generative ai",
+            "llm",
+        ),
+    },
+    "backend_fullstack": {
+        "label": "Backend / Full Stack",
+        "description": "Backend, platform, and full-stack engineering roles.",
+        "terms": (
+            "backend engineer",
+            "backend developer",
+            "platform engineer",
+            "full stack",
+            "full-stack",
+            "fullstack",
+        ),
+    },
+    "ai_ml": {
+        "label": "AI / ML",
+        "description": "AI, ML, and applied AI engineering roles.",
+        "terms": (
+            "ai engineer",
+            "applied ai",
+            "machine learning engineer",
+            "ml engineer",
+            "applied ml",
+            "research engineer",
+        ),
+    },
+    "forward_deployed": {
+        "label": "Forward Deployed",
+        "description": "Forward deployed engineer and adjacent FDE roles.",
+        "terms": (
+            "forward deployed",
+            "forward deploy",
+            "fde",
+        ),
+    },
+}
+
+
+def _like_value(value: str) -> str:
+    return f"%{value.strip().lower()}%"
+
+
+def _build_text_search_clause(fields: tuple[str, ...], terms: list[str]) -> tuple[str, list[str]]:
+    """Return a parameterized OR-clause matching any term in any field."""
+    clauses: list[str] = []
+    params: list[str] = []
+
+    for term in terms:
+        field_clauses = [f"{field} LIKE ?" for field in fields]
+        clauses.append("(" + " OR ".join(field_clauses) + ")")
+        params.extend([_like_value(term)] * len(fields))
+
+    return "(" + " OR ".join(clauses) + ")", params
+
+
+def _build_job_filter_clause(
+    *,
+    search: str = "",
+    profile: str = "",
+    company: str = "",
+    freshness: str = "",
+    active: str = "true",
+) -> tuple[str, list[str]]:
+    """Build the shared WHERE clause used by jobs and stats endpoints."""
+    conditions: list[str] = []
+    params: list[str] = []
+
+    if active == "true":
+        conditions.append("j.is_active = 1")
+    elif active == "false":
+        conditions.append("j.is_active = 0")
+
+    if search:
+        search_clause, search_params = _build_text_search_clause(
+            TEXT_SEARCH_FIELDS, [search]
+        )
+        conditions.append(search_clause)
+        params.extend(search_params)
+
+    if profile:
+        profile_config = JOB_PROFILE_TERMS.get(profile)
+        if profile_config:
+            profile_clause, profile_params = _build_text_search_clause(
+                ("LOWER(COALESCE(j.job_title, ''))",),
+                list(profile_config["terms"]),
+            )
+            conditions.append(profile_clause)
+            params.extend(profile_params)
+
+    if company:
+        conditions.append("j.company_name = ?")
+        params.append(company)
+
+    if freshness == "24h":
+        conditions.append(f"{POSTED_DATE_EXPR} >= datetime('now', '-24 hours')")
+    elif freshness == "48h":
+        conditions.append(f"{POSTED_DATE_EXPR} >= datetime('now', '-48 hours')")
+
+    where = "WHERE " + " AND ".join(conditions) if conditions else ""
+    return where, params
+
 
 # ── Page Routes ──────────────────────────────────────────────────────────────
 
@@ -159,18 +291,37 @@ async def page_admin(request: Request):
 
 
 @app.get("/api/stats")
-async def get_stats():
+async def get_stats(
+    search: str = Query("", description="Search job titles or companies"),
+    profile: str = Query("", description="Preset combined role filter"),
+    company: str = Query("", description="Filter by company name"),
+    freshness: str = Query("", description="Filter: '24h' or '48h' for recent jobs"),
+    active: str = Query(
+        "true", description="Filter active jobs only ('true'/'false'/'all')"
+    ),
+):
     """Return summary statistics."""
     try:
+        where, params = _build_job_filter_clause(
+            search=search,
+            profile=profile,
+            company=company,
+            freshness=freshness,
+            active=active,
+        )
+
         rows = database.query(
-            """
+            f"""
             SELECT
-                (SELECT COUNT(*) FROM job_listings WHERE is_active = 1) as total_jobs,
-                (SELECT COUNT(DISTINCT company_name) FROM job_listings WHERE is_active = 1) as companies_with_jobs,
-                (SELECT COUNT(*) FROM job_listings WHERE ats_system = 'greenhouse' AND is_active = 1) as greenhouse_jobs,
-                (SELECT COUNT(*) FROM job_listings WHERE ats_system = 'lever' AND is_active = 1) as lever_jobs,
-                (SELECT COUNT(*) FROM job_listings WHERE ats_system = 'ashby' AND is_active = 1) as ashby_jobs
-        """
+                COUNT(*) as total_jobs,
+                COUNT(DISTINCT j.company_name) as companies_with_jobs,
+                COUNT(CASE WHEN j.ats_system = 'greenhouse' THEN 1 END) as greenhouse_jobs,
+                COUNT(CASE WHEN j.ats_system = 'lever' THEN 1 END) as lever_jobs,
+                COUNT(CASE WHEN j.ats_system = 'ashby' THEN 1 END) as ashby_jobs
+            FROM job_listings j
+            {where}
+        """,
+            tuple(params),
         )
         stats = rows[0] if rows else {}
 
@@ -181,20 +332,25 @@ async def get_stats():
                 COUNT(CASE WHEN {POSTED_DATE_EXPR} >= datetime('now', '-24 hours') THEN 1 END) as new_24h,
                 COUNT(CASE WHEN {POSTED_DATE_EXPR} >= datetime('now', '-48 hours') THEN 1 END) as new_48h
             FROM job_listings j
-            WHERE j.is_active = 1
-        """
+            {where}
+        """,
+            tuple(params),
         )
         stats["new_24h"] = new_rows[0]["new_24h"] if new_rows else 0
         stats["new_48h"] = new_rows[0]["new_48h"] if new_rows else 0
 
         sponsor_rows = database.query(
-            """
+            f"""
             SELECT COUNT(DISTINCT m.id) as total_sponsors
-            FROM matched_companies m
+            FROM job_listings j
+            JOIN matched_companies m ON j.company_id = m.id
             JOIN h1b_sponsors h ON m.normalized_name = h.normalized_name
+            {where}
+            AND
             WHERE h.fiscal_year IN ('FY2025', 'FY2026')
             AND (h.naics_code LIKE '54%' OR h.naics_code LIKE '51%')
-        """
+        """.replace(f"{where}\n            AND\n            WHERE", f"{where}\n            AND" if where else "WHERE"),
+            tuple(params),
         )
         stats["total_sponsors"] = (
             sponsor_rows[0]["total_sponsors"] if sponsor_rows else 0
@@ -219,6 +375,7 @@ async def get_stats():
 @app.get("/api/jobs")
 async def get_jobs(
     search: str = Query("", description="Search job titles or companies"),
+    profile: str = Query("", description="Preset combined role filter"),
     company: str = Query("", description="Filter by company name"),
     freshness: str = Query("", description="Filter: '24h' or '48h' for recent jobs"),
     active: str = Query(
@@ -229,29 +386,13 @@ async def get_jobs(
     per_page: int = Query(50, ge=1, le=200),
 ):
     """Return paginated job listings."""
-    conditions = []
-    params = []
-
-    # By default only show active jobs; pass active=all to include inactive
-    if active == "true":
-        conditions.append("j.is_active = 1")
-    elif active == "false":
-        conditions.append("j.is_active = 0")
-
-    if search:
-        conditions.append("(j.job_title LIKE ? OR j.company_name LIKE ?)")
-        params.extend([f"%{search}%", f"%{search}%"])
-
-    if company:
-        conditions.append("j.company_name = ?")
-        params.append(company)
-
-    if freshness == "24h":
-        conditions.append(f"{POSTED_DATE_EXPR} >= datetime('now', '-24 hours')")
-    elif freshness == "48h":
-        conditions.append(f"{POSTED_DATE_EXPR} >= datetime('now', '-48 hours')")
-
-    where = "WHERE " + " AND ".join(conditions) if conditions else ""
+    where, params = _build_job_filter_clause(
+        search=search,
+        profile=profile,
+        company=company,
+        freshness=freshness,
+        active=active,
+    )
 
     sort_map = {
         "posted_desc": f"{POSTED_DATE_EXPR} DESC",
@@ -306,6 +447,14 @@ async def get_jobs(
 
     return {
         "jobs": jobs,
+        "available_profiles": [
+            {
+                "id": profile_id,
+                "label": profile_data["label"],
+                "description": profile_data["description"],
+            }
+            for profile_id, profile_data in JOB_PROFILE_TERMS.items()
+        ],
         "total": total,
         "page": page,
         "per_page": per_page,

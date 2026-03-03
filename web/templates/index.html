@@ -64,17 +64,24 @@
       placeholder="Search jobs or companies..."
       class="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-200"
     />
-    <!-- Quick filter tags -->
-    <div class="flex flex-wrap justify-center gap-2 mt-3" id="quick-tags">
-      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Software Engineer I">Software Engineer I</button>
-      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Software Engineer">Software Engineer</button>
-      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="New Grad">New Grad</button>
-      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Data Engineer">Data Engineer</button>
-      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Product Manager">Product Manager</button>
-      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="ML Engineer">ML Engineer</button>
-      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Full Stack">Full Stack</button>
-      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="DevOps">DevOps</button>
-      <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Platform Engineer">Platform Engineer</button>
+    <div class="mt-3">
+      <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Profiles</div>
+      <div id="profile-buttons" class="flex flex-wrap justify-center gap-2 mt-2"></div>
+    </div>
+    <div class="mt-4">
+      <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Quick Searches</div>
+      <!-- Quick filter tags -->
+      <div class="flex flex-wrap justify-center gap-2 mt-2" id="quick-tags">
+        <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Software Engineer I">Software Engineer I</button>
+        <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Software Engineer">Software Engineer</button>
+        <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="New Grad">New Grad</button>
+        <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Data Engineer">Data Engineer</button>
+        <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Product Manager">Product Manager</button>
+        <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="ML Engineer">ML Engineer</button>
+        <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Full Stack">Full Stack</button>
+        <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="DevOps">DevOps</button>
+        <button class="tag-btn px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors" data-q="Platform Engineer">Platform Engineer</button>
+      </div>
     </div>
   </div>
 
@@ -98,6 +105,14 @@
     <span id="result-count" class="text-xs text-gray-400 ml-auto"></span>
   </div>
 
+  <div id="active-filters" class="hidden px-6 py-3 max-w-5xl mx-auto border-b border-gray-100">
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Active</span>
+      <div id="active-filter-chips" class="flex flex-wrap items-center gap-2"></div>
+      <button id="clear-filters" type="button" class="ml-auto text-xs text-blue-600 hover:text-blue-800">Clear all</button>
+    </div>
+  </div>
+
   <!-- Job Cards -->
   <div id="jobs-container" class="px-6 py-4 max-w-5xl mx-auto">
     <div class="text-center py-12 text-gray-400 text-sm">Loading jobs...</div>
@@ -107,8 +122,9 @@
   <div id="pagination" class="px-6 py-4 flex items-center justify-between text-sm text-gray-500 max-w-5xl mx-auto border-t border-gray-100"></div>
 
 <script>
-  let currentPage = 1, currentSearch = '', currentCompany = '', currentSort = 'posted_desc', currentFreshness = '';
+  let currentPage = 1, currentSearch = '', currentCompany = '', currentSort = 'posted_desc', currentFreshness = '', currentProfile = '';
   let activeTag = null;
+  let profileOptionsLoaded = false;
 
   function formatDate(dateStr) {
     if (!dateStr) return { relative: '\u2014', full: '' };
@@ -148,42 +164,55 @@
 
   function encCompany(name) { return encodeURIComponent(name); }
 
+  function buildCurrentParams() {
+    return new URLSearchParams({
+      search: currentSearch,
+      profile: currentProfile,
+      company: currentCompany,
+      freshness: currentFreshness,
+      sort: currentSort,
+      page: currentPage,
+      per_page: 50
+    });
+  }
+
   async function loadStats() {
     try {
-      const r = await (await fetch('/api/stats')).json();
+      const globalParams = new URLSearchParams({ active: 'true' });
+      const globalStats = await (await fetch('/api/stats?' + globalParams)).json();
       const el = document.getElementById('stats-line');
       let html = '';
 
       html += `
         <div class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 rounded-full">
-          <span class="text-sm font-semibold text-gray-900">${r.total_jobs.toLocaleString()}</span>
+          <span class="text-sm font-semibold text-gray-900">${globalStats.total_jobs.toLocaleString()}</span>
           <span class="text-xs text-gray-500">jobs</span>
           <span class="text-gray-300 mx-0.5">\u00b7</span>
-          <span class="text-sm font-semibold text-gray-900">${r.companies_with_jobs}</span>
+          <span class="text-sm font-semibold text-gray-900">${globalStats.companies_with_jobs}</span>
           <span class="text-xs text-gray-500">companies</span>
         </div>`;
 
-      if (r.new_24h > 0) {
+      if (globalStats.new_24h > 0) {
         html += `
           <div class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-full cursor-pointer hover:bg-blue-100 transition-colors" onclick="document.getElementById('freshness-filter').value='24h';currentFreshness='24h';currentPage=1;loadJobs();">
             <span class="inline-block w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>
-            <span class="text-sm font-semibold text-blue-700">${r.new_24h}</span>
+            <span class="text-sm font-semibold text-blue-700">${globalStats.new_24h}</span>
             <span class="text-xs text-blue-600">new today</span>
           </div>`;
       }
 
-      if (r.new_48h > r.new_24h) {
+      if (globalStats.new_48h > globalStats.new_24h) {
         html += `
           <div class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 rounded-full cursor-pointer hover:bg-amber-100 transition-colors" onclick="document.getElementById('freshness-filter').value='48h';currentFreshness='48h';currentPage=1;loadJobs();">
             <span class="inline-block w-1.5 h-1.5 bg-amber-400 rounded-full"></span>
-            <span class="text-sm font-semibold text-amber-700">${r.new_48h}</span>
+            <span class="text-sm font-semibold text-amber-700">${globalStats.new_48h}</span>
             <span class="text-xs text-amber-600">in 48h</span>
           </div>`;
       }
 
       html += `
         <div class="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 rounded-full">
-          <span class="text-sm font-semibold text-green-700">${r.total_sponsors.toLocaleString()}</span>
+          <span class="text-sm font-semibold text-green-700">${globalStats.total_sponsors.toLocaleString()}</span>
           <span class="text-xs text-green-600">H1B sponsors</span>
         </div>`;
 
@@ -192,15 +221,142 @@
   }
 
   async function loadJobs() {
-    const params = new URLSearchParams({ search: currentSearch, company: currentCompany, freshness: currentFreshness, sort: currentSort, page: currentPage, per_page: 50 });
+    renderActiveFilters();
+    const params = buildCurrentParams();
     try {
       const data = await (await fetch('/api/jobs?' + params)).json();
+      loadProfileOptions(data.available_profiles || []);
       renderJobs(data.jobs);
       renderPagination(data);
       document.getElementById('result-count').textContent = data.total + ' results';
     } catch {
       document.getElementById('jobs-container').innerHTML = '<div class="text-center py-12 text-red-500 text-sm">Failed to load jobs</div>';
     }
+  }
+
+  function loadProfileOptions(profiles) {
+    if (profileOptionsLoaded || !profiles.length) return;
+    const container = document.getElementById('profile-buttons');
+    profiles.forEach(profile => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.dataset.profile = profile.id;
+      btn.title = profile.description || '';
+      btn.textContent = profile.label;
+      btn.className = profile.id === 'new_grad_swe_plus'
+        ? 'profile-btn px-4 py-2 text-sm rounded-full border border-blue-300 text-blue-700 bg-white hover:bg-blue-50 hover:border-blue-400 transition-colors'
+        : 'profile-btn px-3 py-1.5 text-xs rounded-full border border-gray-300 text-gray-600 bg-white hover:bg-gray-100 hover:border-gray-400 transition-colors';
+      btn.addEventListener('click', () => toggleProfile(profile.id));
+      container.appendChild(btn);
+    });
+    profileOptionsLoaded = true;
+    syncProfileButtons();
+  }
+
+  function syncProfileButtons() {
+    document.querySelectorAll('.profile-btn').forEach(btn => {
+      const isActive = btn.dataset.profile === currentProfile;
+      const isPrimary = btn.dataset.profile === 'new_grad_swe_plus';
+
+      if (isActive) {
+        btn.classList.remove(
+          'border-gray-300', 'text-gray-600', 'bg-white', 'hover:bg-gray-100',
+          'hover:border-gray-400', 'border-blue-300', 'text-blue-700',
+          'hover:bg-blue-50', 'hover:border-blue-400'
+        );
+        btn.classList.add('bg-blue-600', 'text-white', 'border-blue-600', 'hover:bg-blue-700');
+        return;
+      }
+
+      btn.classList.remove('bg-blue-600', 'text-white', 'border-blue-600', 'hover:bg-blue-700');
+      if (isPrimary) {
+        btn.classList.remove('border-gray-300', 'text-gray-600', 'hover:bg-gray-100', 'hover:border-gray-400');
+        btn.classList.add('border-blue-300', 'text-blue-700', 'bg-white', 'hover:bg-blue-50', 'hover:border-blue-400');
+      } else {
+        btn.classList.remove('border-blue-300', 'text-blue-700', 'hover:bg-blue-50', 'hover:border-blue-400');
+        btn.classList.add('border-gray-300', 'text-gray-600', 'bg-white', 'hover:bg-gray-100', 'hover:border-gray-400');
+      }
+    });
+  }
+
+  function toggleProfile(profileId) {
+    currentProfile = currentProfile === profileId ? '' : profileId;
+    currentPage = 1;
+    syncProfileButtons();
+    loadJobs();
+  }
+
+  function renderActiveFilters() {
+    const wrap = document.getElementById('active-filters');
+    const chips = document.getElementById('active-filter-chips');
+    const items = [];
+
+    if (currentProfile) {
+      const profileBtn = document.querySelector(`.profile-btn[data-profile="${currentProfile}"]`);
+      const label = profileBtn ? profileBtn.textContent : currentProfile;
+      items.push({ kind: 'profile', label: `Profile: ${label}` });
+    }
+    if (currentSearch) items.push({ kind: 'search', label: `Search: ${currentSearch}` });
+    if (currentCompany) items.push({ kind: 'company', label: `Company: ${currentCompany}` });
+    if (currentFreshness) items.push({ kind: 'freshness', label: `Freshness: ${currentFreshness}` });
+
+    if (!items.length) {
+      wrap.classList.add('hidden');
+      chips.innerHTML = '';
+      return;
+    }
+
+    wrap.classList.remove('hidden');
+    chips.innerHTML = items.map(item =>
+      `<button type="button" data-filter-kind="${esc(item.kind)}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs hover:bg-gray-200 transition-colors">
+        <span>${esc(item.label)}</span>
+        <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-gray-500 leading-none transition-colors hover:bg-gray-200">×</span>
+      </button>`
+    ).join('');
+  }
+
+  function clearActiveTag() {
+    if (!activeTag) return;
+    activeTag.classList.remove('bg-gray-900', 'text-white', 'border-gray-900');
+    activeTag.classList.add('text-gray-600', 'border-gray-300');
+    activeTag = null;
+  }
+
+  function clearAllFilters() {
+    currentPage = 1;
+    currentSearch = '';
+    currentCompany = '';
+    currentFreshness = '';
+    currentProfile = '';
+    currentSort = 'posted_desc';
+    clearActiveTag();
+    document.getElementById('search').value = '';
+    document.getElementById('company-filter').value = '';
+    document.getElementById('freshness-filter').value = '';
+    document.getElementById('sort').value = 'posted_desc';
+    syncProfileButtons();
+    loadJobs();
+  }
+
+  function removeFilter(kind) {
+    currentPage = 1;
+
+    if (kind === 'profile') {
+      currentProfile = '';
+      syncProfileButtons();
+    } else if (kind === 'search') {
+      currentSearch = '';
+      document.getElementById('search').value = '';
+      clearActiveTag();
+    } else if (kind === 'company') {
+      currentCompany = '';
+      document.getElementById('company-filter').value = '';
+    } else if (kind === 'freshness') {
+      currentFreshness = '';
+      document.getElementById('freshness-filter').value = '';
+    }
+
+    loadJobs();
   }
 
   function renderJobs(jobs) {
@@ -295,17 +451,12 @@
       const searchInput = document.getElementById('search');
       // Toggle off if same tag clicked
       if (activeTag === btn) {
-        activeTag.classList.remove('bg-gray-900', 'text-white', 'border-gray-900');
-        activeTag.classList.add('text-gray-600', 'border-gray-300');
-        activeTag = null;
+        clearActiveTag();
         searchInput.value = '';
         currentSearch = '';
       } else {
         // Deactivate previous
-        if (activeTag) {
-          activeTag.classList.remove('bg-gray-900', 'text-white', 'border-gray-900');
-          activeTag.classList.add('text-gray-600', 'border-gray-300');
-        }
+        clearActiveTag();
         btn.classList.remove('text-gray-600', 'border-gray-300');
         btn.classList.add('bg-gray-900', 'text-white', 'border-gray-900');
         activeTag = btn;
@@ -322,17 +473,19 @@
   document.getElementById('search').addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
     // Deactivate tag if user types manually
-    if (activeTag) {
-      activeTag.classList.remove('bg-gray-900', 'text-white', 'border-gray-900');
-      activeTag.classList.add('text-gray-600', 'border-gray-300');
-      activeTag = null;
-    }
+    clearActiveTag();
     searchTimeout = setTimeout(() => { currentSearch = e.target.value.trim(); currentPage = 1; loadJobs(); }, 300);
   });
 
   document.getElementById('freshness-filter').addEventListener('change', (e) => { currentFreshness = e.target.value; currentPage = 1; loadJobs(); });
   document.getElementById('company-filter').addEventListener('change', (e) => { currentCompany = e.target.value; currentPage = 1; loadJobs(); });
   document.getElementById('sort').addEventListener('change', (e) => { currentSort = e.target.value; currentPage = 1; loadJobs(); });
+  document.getElementById('clear-filters').addEventListener('click', clearAllFilters);
+  document.getElementById('active-filter-chips').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-filter-kind]');
+    if (!btn) return;
+    removeFilter(btn.dataset.filterKind);
+  });
 
   // Init
   loadStats();
