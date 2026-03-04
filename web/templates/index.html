@@ -102,6 +102,12 @@
       <option value="priority_desc">Priority score</option>
       <option value="title_asc">Title A-Z</option>
     </select>
+    <button id="show-applied-toggle" type="button" class="border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors">
+      Show applied
+    </button>
+    <button id="saved-only-toggle" type="button" class="border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors">
+      Saved only
+    </button>
     <span id="result-count" class="text-xs text-gray-400 ml-auto"></span>
   </div>
 
@@ -109,6 +115,7 @@
     <div class="flex flex-wrap items-center gap-2">
       <span class="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Active</span>
       <div id="active-filter-chips" class="flex flex-wrap items-center gap-2"></div>
+      <button id="clear-saved" type="button" class="hidden text-xs text-gray-500 hover:text-gray-700">Clear saved</button>
       <button id="clear-filters" type="button" class="ml-auto text-xs text-blue-600 hover:text-blue-800">Clear all</button>
     </div>
   </div>
@@ -122,9 +129,17 @@
   <div id="pagination" class="px-6 py-4 flex items-center justify-between text-sm text-gray-500 max-w-5xl mx-auto border-t border-gray-100"></div>
 
 <script>
+  const STORAGE_KEYS = {
+    view: 'jobs:view-state:v1',
+    triage: 'jobs:triage-state:v1',
+  };
+
   let currentPage = 1, currentSearch = '', currentCompany = '', currentSort = 'posted_desc', currentFreshness = '', currentProfile = '';
+  let currentShowApplied = false, currentSavedOnly = false;
   let activeTag = null;
   let profileOptionsLoaded = false;
+  let lastJobsResponse = null;
+  let triageState = { saved: {}, applied: {} };
 
   function formatDate(dateStr) {
     if (!dateStr) return { relative: '\u2014', full: '' };
@@ -163,6 +178,73 @@
   }
 
   function encCompany(name) { return encodeURIComponent(name); }
+
+  function loadStoredJson(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function saveStoredJson(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {}
+  }
+
+  function todayKey() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function pruneLegacyTriageState() {
+    const today = todayKey();
+    Object.keys(triageState.applied || {}).forEach(key => {
+      if (triageState.applied[key] === 'seen' || triageState.applied[key] === today) {
+        triageState.applied[key] = new Date().toISOString();
+      }
+    });
+  }
+
+  function persistViewState() {
+    saveStoredJson(STORAGE_KEYS.view, {
+      search: currentSearch,
+      profile: currentProfile,
+      company: currentCompany,
+      freshness: currentFreshness,
+      sort: currentSort,
+      showApplied: currentShowApplied,
+      savedOnly: currentSavedOnly,
+    });
+  }
+
+  function persistTriageState() {
+    saveStoredJson(STORAGE_KEYS.triage, triageState);
+  }
+
+  function hydrateStateFromStorage() {
+    const viewState = loadStoredJson(STORAGE_KEYS.view, {});
+    const storedTriage = loadStoredJson(STORAGE_KEYS.triage, triageState);
+
+    currentSearch = viewState.search || '';
+    currentProfile = viewState.profile || '';
+    currentCompany = viewState.company || '';
+    currentFreshness = viewState.freshness || '';
+    currentSort = viewState.sort || 'posted_desc';
+    currentShowApplied = Boolean(viewState.showApplied || viewState.showSeen);
+    currentSavedOnly = Boolean(viewState.savedOnly);
+    triageState = {
+      saved: storedTriage.saved || storedTriage.hidden || {},
+      applied: storedTriage.applied || storedTriage.seen || storedTriage.reviewed || {},
+    };
+    pruneLegacyTriageState();
+    persistTriageState();
+
+    document.getElementById('search').value = currentSearch;
+    document.getElementById('freshness-filter').value = currentFreshness;
+    document.getElementById('sort').value = currentSort;
+  }
 
   function buildCurrentParams() {
     return new URLSearchParams({
@@ -222,13 +304,14 @@
 
   async function loadJobs() {
     renderActiveFilters();
+    persistViewState();
     const params = buildCurrentParams();
     try {
       const data = await (await fetch('/api/jobs?' + params)).json();
       loadProfileOptions(data.available_profiles || []);
-      renderJobs(data.jobs);
-      renderPagination(data);
-      document.getElementById('result-count').textContent = data.total + ' results';
+      renderActiveFilters();
+      lastJobsResponse = data;
+      renderCurrentJobsView();
     } catch {
       document.getElementById('jobs-container').innerHTML = '<div class="text-center py-12 text-red-500 text-sm">Failed to load jobs</div>';
     }
@@ -251,6 +334,20 @@
     });
     profileOptionsLoaded = true;
     syncProfileButtons();
+  }
+
+  function syncQuickTags() {
+    activeTag = null;
+    document.querySelectorAll('.tag-btn').forEach(btn => {
+      const isActive = btn.dataset.q === currentSearch;
+      btn.classList.remove('bg-gray-900', 'text-white', 'border-gray-900');
+      btn.classList.add('text-gray-600', 'border-gray-300');
+      if (isActive) {
+        btn.classList.remove('text-gray-600', 'border-gray-300');
+        btn.classList.add('bg-gray-900', 'text-white', 'border-gray-900');
+        activeTag = btn;
+      }
+    });
   }
 
   function syncProfileButtons() {
@@ -279,6 +376,46 @@
     });
   }
 
+  function syncWorkflowToggles() {
+    const configs = [
+      { id: 'show-applied-toggle', active: currentShowApplied },
+      { id: 'saved-only-toggle', active: currentSavedOnly },
+    ];
+
+    configs.forEach(({ id, active }) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      btn.classList.remove('bg-gray-900', 'text-white', 'border-gray-900');
+      btn.classList.add('border-gray-300', 'text-gray-600');
+      if (active) {
+        btn.classList.remove('border-gray-300', 'text-gray-600');
+        btn.classList.add('bg-gray-900', 'text-white', 'border-gray-900');
+      }
+    });
+  }
+
+  function getJobKey(job) {
+    return job.job_url || `${job.company_name}|${job.job_title}|${job.posted_date || ''}`;
+  }
+
+  function isSavedJob(job) {
+    return Boolean(triageState.saved[getJobKey(job)]);
+  }
+
+  function isAppliedJob(job) {
+    return Boolean(triageState.applied[getJobKey(job)]);
+  }
+
+  function applyClientJobFilters(jobs) {
+    return jobs.filter(job => {
+      if (currentSavedOnly && !isSavedJob(job)) return false;
+      if (!currentSavedOnly && isSavedJob(job)) return false;
+      if (currentShowApplied && !isAppliedJob(job)) return false;
+      if (!currentShowApplied && isAppliedJob(job)) return false;
+      return true;
+    });
+  }
+
   function toggleProfile(profileId) {
     currentProfile = currentProfile === profileId ? '' : profileId;
     currentPage = 1;
@@ -289,6 +426,7 @@
   function renderActiveFilters() {
     const wrap = document.getElementById('active-filters');
     const chips = document.getElementById('active-filter-chips');
+    const clearSavedBtn = document.getElementById('clear-saved');
     const items = [];
 
     if (currentProfile) {
@@ -299,14 +437,19 @@
     if (currentSearch) items.push({ kind: 'search', label: `Search: ${currentSearch}` });
     if (currentCompany) items.push({ kind: 'company', label: `Company: ${currentCompany}` });
     if (currentFreshness) items.push({ kind: 'freshness', label: `Freshness: ${currentFreshness}` });
+    if (currentShowApplied) items.push({ kind: 'show_applied', label: 'Show applied' });
+    if (currentSavedOnly) items.push({ kind: 'saved_only', label: 'Saved only' });
 
     if (!items.length) {
       wrap.classList.add('hidden');
       chips.innerHTML = '';
+      clearSavedBtn.classList.add('hidden');
       return;
     }
 
     wrap.classList.remove('hidden');
+    if (Object.keys(triageState.saved || {}).length) clearSavedBtn.classList.remove('hidden');
+    else clearSavedBtn.classList.add('hidden');
     chips.innerHTML = items.map(item =>
       `<button type="button" data-filter-kind="${esc(item.kind)}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs hover:bg-gray-200 transition-colors">
         <span>${esc(item.label)}</span>
@@ -322,6 +465,20 @@
     activeTag = null;
   }
 
+  function renderCurrentJobsView() {
+    if (!lastJobsResponse) return;
+    const visibleJobs = applyClientJobFilters(lastJobsResponse.jobs || []);
+    renderJobs(visibleJobs);
+    renderPagination(lastJobsResponse);
+
+    const totalOnPage = (lastJobsResponse.jobs || []).length;
+    const shownOnPage = visibleJobs.length;
+    const countLabel = shownOnPage !== totalOnPage
+      ? `${lastJobsResponse.total} results · ${shownOnPage}/${totalOnPage} shown on page`
+      : `${lastJobsResponse.total} results`;
+    document.getElementById('result-count').textContent = countLabel;
+  }
+
   function clearAllFilters() {
     currentPage = 1;
     currentSearch = '';
@@ -329,12 +486,16 @@
     currentFreshness = '';
     currentProfile = '';
     currentSort = 'posted_desc';
+    currentShowApplied = false;
+    currentSavedOnly = false;
     clearActiveTag();
     document.getElementById('search').value = '';
     document.getElementById('company-filter').value = '';
     document.getElementById('freshness-filter').value = '';
     document.getElementById('sort').value = 'posted_desc';
     syncProfileButtons();
+    syncQuickTags();
+    syncWorkflowToggles();
     loadJobs();
   }
 
@@ -347,31 +508,105 @@
     } else if (kind === 'search') {
       currentSearch = '';
       document.getElementById('search').value = '';
-      clearActiveTag();
+      syncQuickTags();
     } else if (kind === 'company') {
       currentCompany = '';
       document.getElementById('company-filter').value = '';
     } else if (kind === 'freshness') {
       currentFreshness = '';
       document.getElementById('freshness-filter').value = '';
+    } else if (kind === 'show_applied') {
+      currentShowApplied = false;
+      syncWorkflowToggles();
+      persistViewState();
+      renderActiveFilters();
+      renderCurrentJobsView();
+      return;
+    } else if (kind === 'saved_only') {
+      currentSavedOnly = false;
+      syncWorkflowToggles();
+      persistViewState();
+      renderActiveFilters();
+      renderCurrentJobsView();
+      return;
     }
 
     loadJobs();
   }
 
+  function toggleWorkflowMode(kind) {
+    if (kind === 'applied') {
+      currentShowApplied = !currentShowApplied;
+      if (currentShowApplied) currentSavedOnly = false;
+    }
+    if (kind === 'saved') {
+      currentSavedOnly = !currentSavedOnly;
+      if (currentSavedOnly) currentShowApplied = false;
+    }
+    syncWorkflowToggles();
+    persistViewState();
+    renderActiveFilters();
+    renderCurrentJobsView();
+  }
+
+  function handleJobAction(action, key) {
+    if (action === 'applied') {
+      if (triageState.applied[key]) delete triageState.applied[key];
+      else {
+        triageState.applied[key] = new Date().toISOString();
+        delete triageState.saved[key];
+      }
+    } else if (action === 'save') {
+      if (triageState.saved[key]) delete triageState.saved[key];
+      else triageState.saved[key] = new Date().toISOString();
+    }
+
+    persistTriageState();
+    renderActiveFilters();
+    renderCurrentJobsView();
+  }
+
+  function clearSavedJobs() {
+    const savedCount = Object.keys(triageState.saved || {}).length;
+    if (savedCount > 1) {
+      const confirmed = window.confirm(`Clear ${savedCount} saved jobs? They will return to the main list.`);
+      if (!confirmed) return;
+    }
+
+    triageState.saved = {};
+    currentSavedOnly = false;
+    persistTriageState();
+    persistViewState();
+    syncWorkflowToggles();
+    renderActiveFilters();
+    renderCurrentJobsView();
+  }
+
   function renderJobs(jobs) {
     const c = document.getElementById('jobs-container');
-    if (!jobs.length) { c.innerHTML = '<div class="text-center py-12 text-gray-400 text-sm">No jobs found</div>'; return; }
+    if (!jobs.length) {
+      c.innerHTML = '<div class="text-center py-12 text-gray-400 text-sm">No jobs found for the current view</div>';
+      return;
+    }
 
     c.innerHTML = '<div class="grid gap-3">' + jobs.map(job => {
       const dateField = job.posted_date || job.first_seen_at;
       const posted = formatDate(dateField);
       const freshness = getFreshness(dateField);
+      const key = getJobKey(job);
+      const isSaved = isSavedJob(job);
+      const isApplied = isAppliedJob(job);
       const h1b = job.h1b_approvals > 0
         ? `<span class="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs px-2 py-0.5 rounded-full">${job.h1b_approvals} H1B</span>`
         : '';
       const source = job.source
         ? `<span class="text-xs text-gray-400">${job.source === 'both' ? 'H1B + SEC' : job.source === 'h1b_only' ? 'H1B' : 'SEC'}</span>`
+        : '';
+      const appliedBadge = isApplied
+        ? '<span class="inline-flex items-center gap-1 bg-sky-50 text-sky-700 text-xs px-2 py-0.5 rounded-full">Applied</span>'
+        : '';
+      const savedBadge = isSaved
+        ? '<span class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-xs px-2 py-0.5 rounded-full">Saved</span>'
         : '';
 
       const freshBadge = freshness === 'new'
@@ -402,11 +637,27 @@
                 ${job.department ? `<span>${esc(job.department)}</span>` : ''}
                 <span title="${posted.full}">${posted.relative}${posted.full ? ' \u00b7 ' + posted.full : ''}</span>
               </div>
+              <div class="flex flex-wrap items-center gap-2 mt-3">
+                ${appliedBadge}
+                ${savedBadge}
+              </div>
             </div>
-            <a href="${esc(job.job_url)}" target="_blank" rel="noopener"
-               class="shrink-0 inline-flex items-center px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors">
-              Apply
-            </a>
+            <div class="shrink-0 flex flex-col items-end gap-2">
+              <a href="${esc(job.job_url)}" target="_blank" rel="noopener"
+                 class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors">
+                Apply
+              </a>
+              <div class="flex flex-wrap justify-end gap-1.5">
+                <button type="button" data-job-action="applied" data-job-key="${esc(key)}"
+                  class="${isApplied ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100 hover:border-gray-400'} inline-flex items-center px-2.5 py-1 rounded-full text-[11px] border transition-colors">
+                  ${isApplied ? 'Applied' : 'Applied'}
+                </button>
+                <button type="button" data-job-action="save" data-job-key="${esc(key)}"
+                  class="${isSaved ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100 hover:border-gray-400'} inline-flex items-center px-2.5 py-1 rounded-full text-[11px] border transition-colors">
+                  ${isSaved ? 'Saved' : 'Save'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>`;
     }).join('') + '</div>';
@@ -441,6 +692,7 @@
         opt.textContent = c.company_name + ' (' + c.job_count + ')';
         select.appendChild(opt);
       });
+      if (currentCompany) select.value = currentCompany;
     } catch {}
   }
 
@@ -451,18 +703,13 @@
       const searchInput = document.getElementById('search');
       // Toggle off if same tag clicked
       if (activeTag === btn) {
-        clearActiveTag();
         searchInput.value = '';
         currentSearch = '';
       } else {
-        // Deactivate previous
-        clearActiveTag();
-        btn.classList.remove('text-gray-600', 'border-gray-300');
-        btn.classList.add('bg-gray-900', 'text-white', 'border-gray-900');
-        activeTag = btn;
         searchInput.value = q;
         currentSearch = q;
       }
+      syncQuickTags();
       currentPage = 1;
       loadJobs();
     });
@@ -472,22 +719,36 @@
   let searchTimeout;
   document.getElementById('search').addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
-    // Deactivate tag if user types manually
-    clearActiveTag();
-    searchTimeout = setTimeout(() => { currentSearch = e.target.value.trim(); currentPage = 1; loadJobs(); }, 300);
+    searchTimeout = setTimeout(() => {
+      currentSearch = e.target.value.trim();
+      syncQuickTags();
+      currentPage = 1;
+      loadJobs();
+    }, 300);
   });
 
   document.getElementById('freshness-filter').addEventListener('change', (e) => { currentFreshness = e.target.value; currentPage = 1; loadJobs(); });
   document.getElementById('company-filter').addEventListener('change', (e) => { currentCompany = e.target.value; currentPage = 1; loadJobs(); });
   document.getElementById('sort').addEventListener('change', (e) => { currentSort = e.target.value; currentPage = 1; loadJobs(); });
+  document.getElementById('show-applied-toggle').addEventListener('click', () => toggleWorkflowMode('applied'));
+  document.getElementById('saved-only-toggle').addEventListener('click', () => toggleWorkflowMode('saved'));
+  document.getElementById('clear-saved').addEventListener('click', clearSavedJobs);
   document.getElementById('clear-filters').addEventListener('click', clearAllFilters);
   document.getElementById('active-filter-chips').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-filter-kind]');
     if (!btn) return;
     removeFilter(btn.dataset.filterKind);
   });
+  document.getElementById('jobs-container').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-job-action]');
+    if (!btn) return;
+    handleJobAction(btn.dataset.jobAction, btn.dataset.jobKey);
+  });
 
   // Init
+  hydrateStateFromStorage();
+  syncQuickTags();
+  syncWorkflowToggles();
   loadStats();
   loadJobs();
   loadCompanyFilter();
