@@ -173,7 +173,7 @@ class BedrockOrchestrator:
         }
 
     @staticmethod
-    def _build_structured_facts(facts: list[dict], max_facts: int = 20) -> str:
+    def _build_structured_facts(facts: list[dict], max_facts: int = 30) -> str:
         """Group facts by source_section for clearer context in the prompt."""
         by_section: dict[str, list[str]] = {}
         count = 0
