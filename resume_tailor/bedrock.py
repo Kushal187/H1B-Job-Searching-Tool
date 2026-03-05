@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass
 
 from .output_schemas import (
@@ -622,30 +623,40 @@ class BedrockOrchestrator:
         if not text:
             return None
 
-        try:
-            return json.loads(text)
-        except Exception:
-            pass
-
-        # Strip markdown code fences that models commonly wrap JSON in
-        stripped = text
-        if stripped.startswith("```"):
-            lines = stripped.split("\n", 1)
-            stripped = lines[1] if len(lines) > 1 else ""
-        if stripped.endswith("```"):
-            stripped = stripped[: stripped.rfind("```")]
-        stripped = stripped.strip()
-        if stripped and stripped != text:
+        def _try_parse(s: str) -> dict | None:
+            if not s:
+                return None
+            s = s.strip()
             try:
-                return json.loads(stripped)
-            except Exception:
+                return json.loads(s)
+            except json.JSONDecodeError:
                 pass
+            fixed = re.sub(r",\s*([}\]])", r"\1", s)
+            if fixed != s:
+                try:
+                    return json.loads(fixed)
+                except json.JSONDecodeError:
+                    pass
+            return None
+
+        result = _try_parse(text)
+        if result:
+            return result
+
+        stripped = text
+        if "```" in stripped:
+            match = re.search(r"```(?:json)?\s*\n?(.*?)```", stripped, re.DOTALL)
+            if match:
+                stripped = match.group(1).strip()
+                result = _try_parse(stripped)
+                if result:
+                    return result
 
         start = text.find("{")
         end = text.rfind("}")
         if start >= 0 and end > start:
-            try:
-                return json.loads(text[start : end + 1])
-            except Exception:
-                return None
+            result = _try_parse(text[start : end + 1])
+            if result:
+                return result
+
         return None

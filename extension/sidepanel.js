@@ -27,11 +27,24 @@ async function getActiveTab() {
   return tab;
 }
 
+async function ensureContentScript(tabId) {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+  } catch {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content.js'],
+    });
+  }
+}
+
 async function captureFromPage() {
   const tab = await getActiveTab();
   if (!tab || typeof tab.id !== 'number') {
     throw new Error('No active tab found.');
   }
+
+  await ensureContentScript(tab.id);
 
   const response = await chrome.tabs.sendMessage(tab.id, { type: 'CAPTURE_JD' });
   if (!response?.ok) {

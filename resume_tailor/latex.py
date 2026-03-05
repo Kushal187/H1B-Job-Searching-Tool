@@ -228,8 +228,19 @@ def _make_role_match_key(*, title: str, company: str = "") -> str:
     return title_key
 
 
-def extract_macro_role_targets(template: str, *, max_roles: int = 2) -> list[dict]:
-    """Extract role targets from macro templates for role-aware bullet generation."""
+ACADEMIC_TITLE_PATTERNS = (
+    "teaching assistant",
+    "research assistant",
+    "teaching fellow",
+)
+
+
+def extract_macro_role_targets(template: str, *, max_roles: int = 6) -> list[dict]:
+    """Extract industry role targets from macro templates for role-aware bullet generation.
+
+    Skips academic roles (e.g. Teaching Assistant, Research Assistant) so only
+    industry/co-op/internship roles get tailored bullets.
+    """
     exp_marker = r"\section{Experience}"
     proj_marker = r"\section{Projects}"
     start = template.find(exp_marker)
@@ -251,6 +262,9 @@ def extract_macro_role_targets(template: str, *, max_roles: int = 2) -> list[dic
         title = _to_ascii_safe(m.group("title")).strip()
         company = _to_ascii_safe(m.group("company")).strip()
         if not title:
+            continue
+        title_lower = title.lower()
+        if any(pat in title_lower for pat in ACADEMIC_TITLE_PATTERNS):
             continue
         out.append({"title": title, "company": company})
         if len(out) >= max_roles:

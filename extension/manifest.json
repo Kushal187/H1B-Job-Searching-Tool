@@ -6,13 +6,18 @@
   "permissions": [
     "activeTab",
     "downloads",
+    "scripting",
     "sidePanel",
     "storage",
     "tabs"
   ],
   "host_permissions": [
+    "<all_urls>",
     "http://localhost:8000/*",
-    "https://*.vercel.app/*"
+    "https://*.vercel.app/*",
+    "https://boards-api.greenhouse.io/*",
+    "https://api.lever.co/*",
+    "https://api.ashbyhq.com/*"
   ],
   "background": {
     "service_worker": "background.js",

@@ -104,7 +104,7 @@ class ResumeTailorService:
 
         jd = normalize_text(payload.jd_text, max_chars=self.max_jd_chars)
         template = load_template()
-        role_targets = extract_macro_role_targets(template, max_roles=2)
+        role_targets = extract_macro_role_targets(template)
         try:
             jd_summary = self.orchestrator.parse_jd(jd, usage)
             jd_keywords = jd_summary.get("keywords") or extract_keywords(jd, top_k=16)
