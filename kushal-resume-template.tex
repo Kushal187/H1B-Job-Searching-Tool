@@ -1,0 +1,257 @@
+%-------------------------
+% Resume in Latex
+% Author : Jake Gutierrez
+% Based off of: https://github.com/sb2nov/resume
+% License : MIT
+%------------------------
+
+\documentclass[letterpaper,11pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+% \usepackage{hyperref}
+% \hypersetup{
+%     colorlinks=true,
+%     urlcolor=blue,
+%     linkcolor=black
+% }
+
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{fontawesome5}
+\usepackage{multicol}
+\setlength{\multicolsep}{-3.0pt}
+\setlength{\columnsep}{-1pt}
+\input{glyphtounicode}
+
+
+%----------FONT OPTIONS----------
+% sans-serif
+% \usepackage[sfdefault]{FiraSans}
+% \usepackage[sfdefault]{roboto}
+% \usepackage[sfdefault]{noto-sans}
+% \usepackage[default]{sourcesanspro}
+
+% serif
+% \usepackage{CormorantGaramond}
+% \usepackage{charter}
+
+
+\pagestyle{fancy}
+\fancyhf{} % clear all header and footer fields
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Adjust margins
+\addtolength{\oddsidemargin}{-0.6in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1.19in}
+\addtolength{\topmargin}{-.7in}
+\addtolength{\textheight}{1.4in}
+
+\urlstyle{same}
+
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+
+% Sections formatting
+\titleformat{\section}{
+  \vspace{-4pt}\scshape\raggedright\large\bfseries
+}{}{0em}{}[\color{black}\titlerule \vspace{-5pt}]
+
+% Ensure that generate pdf is machine readable/ATS parsable
+\pdfgentounicode=1
+
+%-------------------------
+% Custom commands
+\newcommand{\resumeItem}[1]{
+  \item\small{
+    {#1 \vspace{-2pt}}
+  }
+}
+
+\newcommand{\classesList}[4]{
+    \item\small{
+        {#1 #2 #3 #4 \vspace{-2pt}}
+  }
+}
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{-2pt}\item
+    \begin{tabular*}{1.0\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & \textbf{\small #2} \\
+      \textit{\small#3} & \textit{\small #4} \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeSubSubheading}[2]{
+    \item
+    \begin{tabular*}{0.97\textwidth}{l@{\extracolsep{\fill}}r}
+      \textit{\small#1} & \textit{\small #2} \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{
+    \item
+    \begin{tabular*}{1.001\textwidth}{l@{\extracolsep{\fill}}r}
+      \small#1 & \textbf{\small #2}\\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeSubItem}[1]{\resumeItem{#1}\vspace{-4pt}}
+
+\renewcommand\labelitemi{$\vcenter{\hbox{\tiny$\bullet$}}$}
+\renewcommand\labelitemii{$\vcenter{\hbox{\tiny$\bullet$}}$}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.0in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-5pt}}
+
+%-------------------------------------------
+%%%%%%  RESUME STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\begin{document}
+
+%----------HEADING----------
+
+
+\begin{center}
+    {\Huge \scshape Sanjeev Kushal Pendekanti} \\ \vspace{2pt}
+    \small 314-710-1271\hspace{4pt}\textbar\hspace{4pt}%
+    \href{mailto:kushalpendekanti2002@gmail.com}{\underline{kushalpendekanti2002@gmail.com}}%
+    \hspace{4pt}\textbar\hspace{4pt}%
+    \href{https://www.linkedin.com/in/kushalpendekanti/}{\underline{linkedin.com/in/kushalpendekanti}}%
+    \hspace{4pt}\textbar\hspace{4pt}%
+    Boston, MA
+\end{center}
+\vspace{-15pt}
+%-----------EDUCATION-----------
+%-----------EDUCATION-----------
+\section{Education}
+\resumeSubHeadingListStart
+  \resumeSubheading
+    {Northeastern University}{Sep. 2024 -- Aug. 2026}
+    {Master of Science in Computer Science}{Boston, MA}
+
+  \resumeSubheading
+    {Manipal Institute of Technology}{Oct. 2020 -- May 2024}
+    {Bachelor of Technology in Information Technology}{Manipal, India}
+   
+\resumeSubHeadingListEnd
+
+
+
+%-----------EXPERIENCE-----------
+\vspace{-10pt}
+\section{Experience}
+  \resumeSubHeadingListStart
+  \resumeSubheading
+  {The Burnes Center for Social Change}{Jan. 2026 -- Present}
+  {Generative AI Engineer Co-op}{Boston, MA}
+  \resumeItemListStart
+   
+    \resumeItem{Built retrieval-augmented generation (RAG) systems for InnovateUS, a national learning platform serving 100,000+ public-sector professionals across U.S. government agencies.}
+    \resumeItem{Designed and engineered document ingestion, embedding pipelines, and semantic retrieval using AWS Lambda and WeaviateDB to ground LLM responses.}
+    \resumeItem{Collaborated with product, policy, and engineering stakeholders to translate public-sector requirements into scalable, production-ready AI systems.}
+
+  \resumeItemListEnd
+
+    \resumeSubheading
+  {99 Yards}{May 2025 -- Aug. 2025}
+  {Software Engineer Intern}{New York, NY}
+  % \resumeItemListStart
+  %     \resumeItem{Resolved critical signup and profile image upload bugs using TypeScript, increasing onboarding completion rates by over 40\% and enabling high-resolution profile images.}
+  %     \resumeItem{Streamlined Redux state management to deliver smoother navigation and restructured API calls to cut unnecessary data fetching, reducing app crashes by 20\% and improving load times.}
+  %     \resumeItem{Refactored the multi-step job posting flow and improved backend integration with Java Spring Boot, consolidating screens and reducing process time by 2x.}
+  %     \resumeItem{Led the end-to-end overhaul of the Offers module, leveraging Google Cloud Platform (GCP) for scalable multi-image storage and launching a redesigned UI to improve user experience.}
+  %     \resumeItem{Configured GitHub Actions for CI/CD and integrated Jest tests into the React Native codebase, enabling reliable production deployments and reducing regression bugs.}
+  %   \resumeItemListEnd
+  \resumeItemListStart
+    \resumeItem{Increased onboarding rates by approximately 40\% and cut crashes by 20\% by fixing critical TypeScript bugs and optimizing Redux state management and API logic for smoother navigation.}
+    \resumeItem{Reduced process time by 2x by refactoring job posting flows and overhauling the Offers module with Java Spring Boot and GCP for scalable multi-image storage.}
+    \resumeItem{Automated production deployments and minimized regression bugs by implementing GitHub Actions CI/CD pipelines and Jest testing for the React Native codebase.}
+\resumeItemListEnd
+    \resumeSubheading
+  {Khoury College of Computer Sciences}{Jan. 2025 -- Mar. 2025}
+  {Graduate Teaching Assistant}{Boston, MA}
+  \resumeItemListStart
+    \resumeItem{Mentored 50+ students in building Android applications using Kotlin and Jetpack Compose in the CS 4520 course.}
+    \resumeItem{Held weekly office hours, resolving technical queries on UI architecture, Firebase integration, and Android components.}
+    \resumeItem{Evaluated 60+ mobile development assignments and projects, providing actionable feedback to improve code quality.}
+  \resumeItemListEnd
+    \resumeSubheading
+      {Manipal Institute of Technology}{Aug. 2023 -- May 2024}
+      {Undergraduate Research Assistant}{Manipal, India}
+      \resumeItemListStart
+        \resumeItem{Built high-accuracy medical ML models, including a Random Forest model for liver cirrhosis prediction (86\% accuracy) and OTONet, an otoscopy image classifier using Octave 3D Convolution (99.3\% accuracy).}
+        \resumeItem{Published 5 research papers on medical AI and image classification in top peer-reviewed IEEE journals and conferences.}
+      \resumeItemListEnd
+    \resumeSubheading
+      {Boeing}{Jun. 2023 -- Aug. 2023}
+      {Software Engineer Intern}{Bangalore, India}
+      \resumeItemListStart
+       
+        \resumeItem{Implemented a localized SQLite3 caching layer, replacing external API calls with local database lookups to reduce latency by 30\% and enable XML/JSON response support for easier system integration.}
+        \resumeItem{Automated workflows by developing RESTful services in Python and Flask to improve configurability, reduce integration turnaround and cut application response times by 50\%.}
+        \resumeItem{Designed and deployed a distributed task dispatcher using AWS SQS and Boto3 to enable scalable, fault-tolerant task dispatching and eliminate infrastructure management overhead.}
+      
+    \resumeItemListEnd
+    
+  \resumeSubHeadingListEnd
+\vspace{-12pt}
+
+
+\section{Projects}
+\vspace{-8pt}
+\resumeSubHeadingListStart
+
+\resumeProjectHeading
+  {\textbf{Web App for Legal Case Management with ML Prioritization} $|$ \emph{React, MongoDB, Java, Python}}{}
+  \resumeItemListStart
+    \resumeItem{Engineered a full-stack application with ML-based case prioritization and secure Spring Boot APIs, leading to a published Indian patent for the system's algorithm and workflow design.}
+  \resumeItemListEnd
+\vspace{-16pt}
+
+
+\resumeProjectHeading
+  {\textbf{Cross-Platform Domestic Help Finder App} $|$ \emph{Java, Android Studio, Swift, Firebase}}{}
+  \resumeItemListStart
+   
+    \resumeItem{Developed cross-platform iOS and Android apps with real-time messaging and location-based matching by integrating Firebase-backed synchronization and Google Maps APIs across 10+ screens.}
+
+  \resumeItemListEnd
+
+\resumeSubHeadingListEnd
+
+
+
+
+\vspace{-15pt}
+%-----------PROGRAMMING SKILLS-----------
+\section{Technical Skills}
+\begin{itemize}[leftmargin=0.15in, label={}]
+  \small \item {
+    \textbf{Languages:} Java, Python, TypeScript, JavaScript, SQL, C/C++, Swift, Kotlin \\
+    \textbf{Frameworks:} React, React Native, Spring Boot, Node.js, Flask, Firebase \\
+    \textbf{Machine Learning:} NumPy, Pandas, scikit-learn, TensorFlow \\
+    \textbf{Databases:} MySQL, MongoDB, SQLite \\
+    \textbf{Tools \& Cloud:} AWS, GCP, Git, JIRA, Postman, Docker, CI/CD
+  }
+\end{itemize}
+\vspace{-15pt}
+
+
+
+
+\end{document}

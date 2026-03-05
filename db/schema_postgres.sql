@@ -77,6 +77,39 @@ CREATE TABLE IF NOT EXISTS job_listings (
     raw_json TEXT
 );
 
+CREATE TABLE IF NOT EXISTS user_profile (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    location TEXT,
+    headline TEXT,
+    constraints_json TEXT,
+    updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS profile_fact (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    profile_id BIGINT NOT NULL REFERENCES user_profile(id) ON DELETE CASCADE,
+    fact_type TEXT NOT NULL,
+    source_section TEXT,
+    raw_text TEXT NOT NULL,
+    normalized_keywords TEXT,
+    priority INTEGER DEFAULT 50,
+    active INTEGER DEFAULT 1,
+    updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS generation_event (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    trace_id TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    status TEXT NOT NULL,
+    latency_ms INTEGER DEFAULT 0,
+    model_route TEXT,
+    token_in INTEGER DEFAULT 0,
+    token_out INTEGER DEFAULT 0,
+    error_code TEXT
+);
+
 -- Indexes for fast matching lookups
 CREATE INDEX IF NOT EXISTS idx_sec_normalized ON sec_formd_companies(normalized_name);
 CREATE INDEX IF NOT EXISTS idx_h1b_normalized ON h1b_sponsors(normalized_name);
@@ -86,3 +119,6 @@ CREATE INDEX IF NOT EXISTS idx_ats_status ON company_ats_status(ats_system);
 CREATE INDEX IF NOT EXISTS idx_ats_normalized ON company_ats_status(normalized_name);
 CREATE INDEX IF NOT EXISTS idx_workday_tenant ON workday_boards(tenant);
 CREATE INDEX IF NOT EXISTS idx_workday_normalized ON workday_boards(normalized_name);
+CREATE INDEX IF NOT EXISTS idx_profile_fact_profile ON profile_fact(profile_id);
+CREATE INDEX IF NOT EXISTS idx_profile_fact_priority ON profile_fact(priority DESC);
+CREATE INDEX IF NOT EXISTS idx_generation_event_created ON generation_event(created_at);

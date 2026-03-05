@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "JD Resume Autotailor",
+  "version": "0.1.0",
+  "description": "Capture job descriptions from the current tab and generate tailored resumes.",
+  "permissions": [
+    "activeTab",
+    "downloads",
+    "sidePanel",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "https://*.vercel.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Tailor Resume",
+    "default_popup": "popup.html"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

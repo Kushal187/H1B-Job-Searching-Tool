@@ -416,6 +416,39 @@ def _sqlite_migrations() -> list[str]:
         )""",
         "CREATE INDEX IF NOT EXISTS idx_workday_tenant ON workday_boards(tenant)",
         "CREATE INDEX IF NOT EXISTS idx_workday_normalized ON workday_boards(normalized_name)",
+        """CREATE TABLE IF NOT EXISTS user_profile (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            location TEXT,
+            headline TEXT,
+            constraints_json TEXT,
+            updated_at TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS profile_fact (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            profile_id INTEGER NOT NULL REFERENCES user_profile(id) ON DELETE CASCADE,
+            fact_type TEXT NOT NULL,
+            source_section TEXT,
+            raw_text TEXT NOT NULL,
+            normalized_keywords TEXT,
+            priority INTEGER DEFAULT 50,
+            active INTEGER DEFAULT 1,
+            updated_at TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS generation_event (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trace_id TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL,
+            status TEXT NOT NULL,
+            latency_ms INTEGER DEFAULT 0,
+            model_route TEXT,
+            token_in INTEGER DEFAULT 0,
+            token_out INTEGER DEFAULT 0,
+            error_code TEXT
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_profile_fact_profile ON profile_fact(profile_id)",
+        "CREATE INDEX IF NOT EXISTS idx_profile_fact_priority ON profile_fact(priority DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_generation_event_created ON generation_event(created_at)",
     ]
 
 
@@ -445,6 +478,39 @@ def _postgres_migrations() -> list[str]:
         )""",
         "CREATE INDEX IF NOT EXISTS idx_workday_tenant ON workday_boards(tenant)",
         "CREATE INDEX IF NOT EXISTS idx_workday_normalized ON workday_boards(normalized_name)",
+        """CREATE TABLE IF NOT EXISTS user_profile (
+            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            location TEXT,
+            headline TEXT,
+            constraints_json TEXT,
+            updated_at TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS profile_fact (
+            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            profile_id BIGINT NOT NULL REFERENCES user_profile(id) ON DELETE CASCADE,
+            fact_type TEXT NOT NULL,
+            source_section TEXT,
+            raw_text TEXT NOT NULL,
+            normalized_keywords TEXT,
+            priority INTEGER DEFAULT 50,
+            active INTEGER DEFAULT 1,
+            updated_at TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS generation_event (
+            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            trace_id TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL,
+            status TEXT NOT NULL,
+            latency_ms INTEGER DEFAULT 0,
+            model_route TEXT,
+            token_in INTEGER DEFAULT 0,
+            token_out INTEGER DEFAULT 0,
+            error_code TEXT
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_profile_fact_profile ON profile_fact(profile_id)",
+        "CREATE INDEX IF NOT EXISTS idx_profile_fact_priority ON profile_fact(priority DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_generation_event_created ON generation_event(created_at)",
     ]
 
 

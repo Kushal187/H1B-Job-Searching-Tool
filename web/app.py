@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from urllib.parse import unquote
 
 from fastapi import FastAPI, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -18,8 +19,21 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import config
 from db import database
+from resume_tailor import (
+    ProfileUpsertRequest,
+    ResumeGenerateRequest,
+    ResumeTailorService,
+    ResumeValidateRequest,
+)
 
 app = FastAPI(title="H1B Job Search")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in os.environ.get("CORS_ALLOW_ORIGINS", "*").split(",") if o.strip()],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 templates = Jinja2Templates(
     directory=os.path.join(os.path.dirname(__file__), "templates")
 )
@@ -112,6 +126,8 @@ _scrape_status = {
     "error": None,
     "log": [],
 }
+
+resume_tailor_service = ResumeTailorService()
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -285,6 +301,12 @@ async def page_company_detail(request: Request, company_name: str):
 async def page_admin(request: Request):
     """Admin dashboard page."""
     return templates.TemplateResponse("admin.html", {"request": request})
+
+
+@app.get("/profile", response_class=HTMLResponse)
+async def page_profile(request: Request):
+    """Profile editor page for resume tailoring facts."""
+    return templates.TemplateResponse("profile.html", {"request": request})
 
 
 # ── API: Stats ───────────────────────────────────────────────────────────────
@@ -597,6 +619,45 @@ async def get_company_detail(company_name: str):
         "h1b": [dict(r) for r in h1b_rows],
         "jobs": jobs,
     }
+
+
+@app.post("/api/profile/upsert")
+async def profile_upsert(payload: ProfileUpsertRequest):
+    """Create or update the active profile and replace facts atomically."""
+    try:
+        profile = resume_tailor_service.upsert_profile(payload)
+        return {"ok": True, "profile": profile.model_dump()}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.get("/api/profile")
+async def profile_get(profile_id: int | None = Query(None)):
+    """Fetch the most recently updated profile or a specific profile by ID."""
+    profile = resume_tailor_service.get_profile(profile_id=profile_id)
+    if not profile:
+        return JSONResponse({"error": "Profile not found"}, status_code=404)
+    return {"profile": profile.model_dump()}
+
+
+@app.post("/api/resume/validate")
+async def resume_validate(payload: ResumeValidateRequest):
+    """Validate generated content against profile facts and JD keywords."""
+    try:
+        result = resume_tailor_service.validate(payload)
+        return {"validation": result.model_dump()}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.post("/api/resume/generate")
+async def resume_generate(payload: ResumeGenerateRequest):
+    """Generate a tailored resume PDF from a JD and active profile facts."""
+    try:
+        result = resume_tailor_service.generate(payload)
+        return {"result": result.model_dump()}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
 
 
 # ── Admin API ────────────────────────────────────────────────────────────────

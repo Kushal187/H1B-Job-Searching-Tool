@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resume Autotailor</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+  <style>
+    body { min-width: 420px; min-height: 620px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Resume Autotailor</h1>
+    <p class="sub">Capture JD from current page, generate, then download PDF.</p>
+
+    <label>API Base URL</label>
+    <input id="apiBase" type="text" placeholder="http://localhost:8000" />
+
+    <label>Profile ID</label>
+    <input id="profileId" type="number" min="1" placeholder="1" />
+
+    <div class="row">
+      <button id="captureBtn" class="secondary">Capture JD</button>
+      <button id="generateBtn" class="primary">Generate PDF</button>
+    </div>
+
+    <label>JD Text (editable fallback)</label>
+    <textarea id="jdText" rows="12" placeholder="If extraction fails, paste JD here."></textarea>
+
+    <div class="row">
+      <button id="downloadBtn" class="secondary" disabled>Download PDF</button>
+      <span id="status"></span>
+    </div>
+
+    <div id="warnings" class="warnings"></div>
+    <pre id="meta"></pre>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

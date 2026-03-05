@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profile - H1B Job Search</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <script>
+    (function () {
+      try {
+        const savedTheme = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = { darkMode: 'class' };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  </style>
+  <link rel="stylesheet" href="/static/theme.css" />
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen">
+
+  <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+    <a href="/" class="text-lg font-semibold text-gray-900 hover:text-gray-700">H1B Job Search</a>
+    <div class="flex items-center gap-4">
+      <div class="flex gap-6 text-sm">
+        <a href="/" class="text-gray-500 hover:text-gray-700">Jobs</a>
+        <a href="/companies" class="text-gray-500 hover:text-gray-700">Companies</a>
+        <a href="/profile" class="text-gray-900 font-medium border-b-2 border-gray-900 pb-0.5">Profile</a>
+        <a href="/admin" class="text-gray-500 hover:text-gray-700">Admin</a>
+      </div>
+      <button id="theme-toggle" type="button" class="theme-toggle-btn" aria-label="Toggle dark mode" aria-pressed="false">
+        <svg class="theme-icon theme-icon-moon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646a9 9 0 1011.708 11.708z"></path>
+        </svg>
+        <svg class="theme-icon theme-icon-sun" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364 6.364l-1.414-1.414M7.05 7.05 5.636 5.636m12.728 0L16.95 7.05M7.05 16.95l-1.414 1.414M12 16a4 4 0 100-8 4 4 0 000 8z"></path>
+        </svg>
+      </button>
+    </div>
+  </nav>
+
+  <div class="max-w-6xl mx-auto px-6 py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <aside class="lg:col-span-4 space-y-5">
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+          <h1 class="text-xl font-semibold">Career Profile</h1>
+          <p class="text-sm text-gray-500 mt-1">Fill once, tailor many resumes.</p>
+          <div class="mt-4 p-3 rounded-lg bg-blue-50 text-blue-700 text-xs" id="status-banner">Loading profile...</div>
+          <div class="mt-4 text-xs text-gray-500 space-y-1">
+            <div><span class="font-semibold text-gray-700">Profile ID:</span> <span id="meta-profile-id">-</span></div>
+            <div><span class="font-semibold text-gray-700">Facts:</span> <span id="meta-fact-count">0</span></div>
+            <div><span class="font-semibold text-gray-700">Last Updated:</span> <span id="meta-updated">-</span></div>
+          </div>
+          <button id="save-profile-btn" class="mt-4 w-full bg-blue-600 text-white text-sm font-medium rounded-lg px-4 py-2.5 hover:bg-blue-700">Save Profile</button>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-500">How It Works</h2>
+          <ol class="mt-3 text-sm text-gray-700 space-y-2 list-decimal list-inside">
+            <li>Add your core facts once.</li>
+            <li>Set priority for strongest evidence.</li>
+            <li>Resume generation pulls highest-value facts for each JD.</li>
+          </ol>
+        </div>
+      </aside>
+
+      <main class="lg:col-span-8 space-y-6">
+        <section class="bg-white border border-gray-200 rounded-xl p-5">
+          <h2 class="text-lg font-semibold">Personal Header</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Name</label>
+              <input id="name" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Your full name" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Location</label>
+              <input id="location" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Boston, MA, USA" />
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs text-gray-500 mb-1">Headline</label>
+              <input id="headline" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Software Engineer | Backend | AI" />
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs text-gray-500 mb-1">Constraints (JSON)</label>
+              <textarea id="constraints" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder='{"inference_mode":"light"}'></textarea>
+            </div>
+          </div>
+        </section>
+
+        <section class="bg-white border border-gray-200 rounded-xl p-5">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold">Evidence Facts</h2>
+            <span class="text-xs text-gray-500">Add concrete bullets from experience/projects/education.</span>
+          </div>
+
+          <div class="mt-4 border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Type</label>
+                <select id="fact-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  <option value="experience">Experience</option>
+                  <option value="project">Project</option>
+                  <option value="education">Education</option>
+                  <option value="skill">Skill</option>
+                  <option value="award">Award</option>
+                  <option value="summary">Summary</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Section</label>
+                <input id="fact-source" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Work Experience" />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Priority (0-100)</label>
+                <input id="fact-priority" type="number" min="0" max="100" value="50" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div class="flex items-end">
+                <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <input id="fact-active" type="checkbox" checked class="rounded border-gray-300" /> Active
+                </label>
+              </div>
+            </div>
+            <div class="mt-3">
+              <label class="block text-xs text-gray-500 mb-1">Keywords (comma-separated)</label>
+              <input id="fact-keywords" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="python, aws, distributed systems" />
+            </div>
+            <div class="mt-3">
+              <label class="block text-xs text-gray-500 mb-1">Fact Text</label>
+              <textarea id="fact-raw" rows="4" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Built retrieval pipelines with AWS Lambda and vector DB to improve semantic search quality."></textarea>
+            </div>
+            <div class="mt-3 flex gap-2">
+              <button id="add-fact-btn" class="bg-gray-900 text-white text-sm rounded-lg px-3 py-2 hover:bg-gray-800">Add Fact</button>
+              <button id="update-fact-btn" class="hidden bg-blue-600 text-white text-sm rounded-lg px-3 py-2 hover:bg-blue-700">Update Fact</button>
+              <button id="cancel-edit-btn" class="hidden border border-gray-300 text-sm rounded-lg px-3 py-2 hover:bg-gray-100">Cancel</button>
+            </div>
+          </div>
+
+          <div id="facts-list" class="mt-4 space-y-3">
+            <div class="text-sm text-gray-500">No facts yet. Add your strongest resume bullets.</div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+<script>
+  const state = {
+    profileId: null,
+    facts: [],
+    editIndex: null,
+  };
+
+  const el = {
+    banner: document.getElementById('status-banner'),
+    profileId: document.getElementById('meta-profile-id'),
+    factCount: document.getElementById('meta-fact-count'),
+    updated: document.getElementById('meta-updated'),
+    name: document.getElementById('name'),
+    location: document.getElementById('location'),
+    headline: document.getElementById('headline'),
+    constraints: document.getElementById('constraints'),
+    type: document.getElementById('fact-type'),
+    source: document.getElementById('fact-source'),
+    priority: document.getElementById('fact-priority'),
+    active: document.getElementById('fact-active'),
+    keywords: document.getElementById('fact-keywords'),
+    raw: document.getElementById('fact-raw'),
+    addBtn: document.getElementById('add-fact-btn'),
+    updateBtn: document.getElementById('update-fact-btn'),
+    cancelBtn: document.getElementById('cancel-edit-btn'),
+    list: document.getElementById('facts-list'),
+    saveBtn: document.getElementById('save-profile-btn'),
+  };
+
+  function setBanner(text, tone = 'info') {
+    const palette = {
+      info: ['bg-blue-50', 'text-blue-700'],
+      ok: ['bg-emerald-50', 'text-emerald-700'],
+      warn: ['bg-amber-50', 'text-amber-700'],
+      err: ['bg-red-50', 'text-red-700'],
+    };
+    el.banner.className = 'mt-4 p-3 rounded-lg text-xs ' + (palette[tone] || palette.info).join(' ');
+    el.banner.textContent = text;
+  }
+
+  function parseKeywords(value) {
+    return value
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean);
+  }
+
+  function resetFactForm() {
+    el.type.value = 'experience';
+    el.source.value = '';
+    el.priority.value = '50';
+    el.active.checked = true;
+    el.keywords.value = '';
+    el.raw.value = '';
+    state.editIndex = null;
+    el.addBtn.classList.remove('hidden');
+    el.updateBtn.classList.add('hidden');
+    el.cancelBtn.classList.add('hidden');
+  }
+
+  function renderFacts() {
+    el.factCount.textContent = String(state.facts.length);
+    if (!state.facts.length) {
+      el.list.innerHTML = '<div class="text-sm text-gray-500">No facts yet. Add your strongest resume bullets.</div>';
+      return;
+    }
+
+    el.list.innerHTML = state.facts.map((fact, idx) => {
+      const keywords = (fact.normalized_keywords || []).join(', ');
+      const activeBadge = fact.active
+        ? '<span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">Active</span>'
+        : '<span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">Inactive</span>';
+      return `
+        <div class="border border-gray-200 rounded-lg p-4 bg-white">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">${fact.fact_type}</span>
+                <span class="text-xs text-gray-500">${fact.source_section || 'Unspecified section'}</span>
+                <span class="text-xs text-gray-500">Priority ${fact.priority}</span>
+                ${activeBadge}
+              </div>
+              <p class="text-sm text-gray-800 mt-2 whitespace-pre-wrap">${escapeHtml(fact.raw_text || '')}</p>
+              ${keywords ? `<p class="text-xs text-gray-500 mt-1">Keywords: ${escapeHtml(keywords)}</p>` : ''}
+            </div>
+            <div class="flex gap-2">
+              <button data-action="edit" data-index="${idx}" class="text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-100">Edit</button>
+              <button data-action="delete" data-index="${idx}" class="text-xs border border-red-200 text-red-600 rounded px-2 py-1 hover:bg-red-50">Delete</button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  function buildFactFromForm() {
+    const raw = el.raw.value.trim();
+    if (raw.length < 2) {
+      throw new Error('Fact text must be at least 2 characters.');
+    }
+
+    return {
+      fact_type: el.type.value,
+      source_section: el.source.value.trim(),
+      raw_text: raw,
+      normalized_keywords: parseKeywords(el.keywords.value),
+      priority: Math.max(0, Math.min(100, Number(el.priority.value || '50'))),
+      active: Boolean(el.active.checked),
+    };
+  }
+
+  async function loadProfile() {
+    try {
+      const resp = await fetch('/api/profile');
+      if (resp.status === 404) {
+        setBanner('No saved profile yet. Fill details and click Save Profile.', 'warn');
+        resetFactForm();
+        renderFacts();
+        return;
+      }
+
+      const data = await resp.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      const profile = data.profile;
+      state.profileId = profile.id;
+      state.facts = profile.facts || [];
+
+      el.name.value = profile.name || '';
+      el.location.value = profile.location || '';
+      el.headline.value = profile.headline || '';
+      el.constraints.value = JSON.stringify(profile.constraints || {}, null, 2);
+
+      el.profileId.textContent = String(profile.id || '-');
+      el.updated.textContent = profile.updated_at || '-';
+      setBanner('Profile loaded. Update any field and click Save Profile.', 'ok');
+      resetFactForm();
+      renderFacts();
+    } catch (e) {
+      setBanner(String(e), 'err');
+    }
+  }
+
+  async function saveProfile() {
+    try {
+      let constraints = {};
+      if (el.constraints.value.trim()) {
+        constraints = JSON.parse(el.constraints.value);
+      }
+
+      const payload = {
+        profile_id: state.profileId,
+        name: el.name.value.trim(),
+        location: el.location.value.trim(),
+        headline: el.headline.value.trim(),
+        constraints,
+        facts: state.facts,
+      };
+
+      if (!payload.name || payload.name.length < 2) {
+        throw new Error('Name is required.');
+      }
+
+      const resp = await fetch('/api/profile/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        throw new Error(data.error || 'Failed to save profile.');
+      }
+
+      const profile = data.profile;
+      state.profileId = profile.id;
+      state.facts = profile.facts || [];
+      el.profileId.textContent = String(profile.id);
+      el.updated.textContent = profile.updated_at || '-';
+      setBanner('Profile saved successfully.', 'ok');
+      renderFacts();
+    } catch (e) {
+      setBanner(String(e), 'err');
+    }
+  }
+
+  el.addBtn.addEventListener('click', () => {
+    try {
+      const fact = buildFactFromForm();
+      state.facts.unshift(fact);
+      resetFactForm();
+      renderFacts();
+      setBanner('Fact added. Click Save Profile to persist changes.', 'info');
+    } catch (e) {
+      setBanner(String(e), 'err');
+    }
+  });
+
+  el.updateBtn.addEventListener('click', () => {
+    try {
+      if (state.editIndex === null) return;
+      state.facts[state.editIndex] = buildFactFromForm();
+      resetFactForm();
+      renderFacts();
+      setBanner('Fact updated. Click Save Profile to persist changes.', 'info');
+    } catch (e) {
+      setBanner(String(e), 'err');
+    }
+  });
+
+  el.cancelBtn.addEventListener('click', () => resetFactForm());
+
+  el.list.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const action = target.dataset.action;
+    const index = Number(target.dataset.index);
+    if (Number.isNaN(index)) return;
+
+    if (action === 'delete') {
+      state.facts.splice(index, 1);
+      renderFacts();
+      setBanner('Fact removed. Click Save Profile to persist changes.', 'warn');
+      return;
+    }
+
+    if (action === 'edit') {
+      const fact = state.facts[index];
+      state.editIndex = index;
+      el.type.value = fact.fact_type || 'experience';
+      el.source.value = fact.source_section || '';
+      el.priority.value = String(fact.priority ?? 50);
+      el.active.checked = Boolean(fact.active);
+      el.keywords.value = (fact.normalized_keywords || []).join(', ');
+      el.raw.value = fact.raw_text || '';
+      el.addBtn.classList.add('hidden');
+      el.updateBtn.classList.remove('hidden');
+      el.cancelBtn.classList.remove('hidden');
+      setBanner('Editing fact. Update and click "Update Fact".', 'info');
+    }
+  });
+
+  el.saveBtn.addEventListener('click', saveProfile);
+
+  loadProfile();
+</script>
+<script src="/static/theme.js"></script>
+
+</body>
+</html>

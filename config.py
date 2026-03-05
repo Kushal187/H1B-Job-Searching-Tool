@@ -100,3 +100,28 @@ SCRAPE_CIRCUIT_BREAKER_COOLDOWN = 60  # seconds to skip requests when breaker is
 # ─── Matching Configuration ──────────────────────────────────────────────────
 
 FUZZY_MATCH_THRESHOLD = 85  # minimum score for fuzzy name match
+
+# ─── Resume Tailoring Configuration ──────────────────────────────────────────
+
+BEDROCK_REGION = os.environ.get("BEDROCK_REGION", "us-east-1")
+RESUME_ENABLE_BEDROCK = os.environ.get("RESUME_ENABLE_BEDROCK", "true")
+RESUME_BEDROCK_INFERENCE_PROFILE_ID = os.environ.get(
+    "RESUME_BEDROCK_INFERENCE_PROFILE_ID", ""
+)
+RESUME_PARSER_MODEL = os.environ.get(
+    "RESUME_PARSER_MODEL", "openai.gpt-oss-20b-1:0"
+)
+RESUME_REWRITER_MODEL = os.environ.get(
+    "RESUME_REWRITER_MODEL", "anthropic.claude-3-7-sonnet-20250219-v1:0"
+)
+RESUME_VALIDATOR_MODEL = os.environ.get(
+    "RESUME_VALIDATOR_MODEL", RESUME_PARSER_MODEL
+)
+RESUME_MAX_MODEL_TOKENS = int(os.environ.get("RESUME_MAX_MODEL_TOKENS", "1200"))
+RESUME_MAX_JD_CHARS = int(os.environ.get("RESUME_MAX_JD_CHARS", "20000"))
+RESUME_DAILY_TOKEN_BUDGET = int(os.environ.get("RESUME_DAILY_TOKEN_BUDGET", "600000"))
+RESUME_REQUEST_TOKEN_BUDGET = int(
+    os.environ.get("RESUME_REQUEST_TOKEN_BUDGET", "70000")
+)
+RESUME_LATEX_TEMPLATE_PATH = os.environ.get("RESUME_LATEX_TEMPLATE_PATH", "")
+TECTONIC_BIN = os.environ.get("TECTONIC_BIN", "tectonic")

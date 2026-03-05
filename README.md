@@ -129,3 +129,67 @@ The workflow:
 - `companies_with_jobs.csv`
 - `new_jobs.csv`
 - `summary_report.json`
+
+## Resume Autotailor (JD -> Tailored PDF Resume)
+
+This repo now includes a resume-tailoring backend + Chrome extension scaffold.
+
+### New API endpoints
+
+- `POST /api/profile/upsert`
+- `GET /api/profile?profile_id=<optional>`
+- `POST /api/resume/validate`
+- `POST /api/resume/generate`
+
+### New UI page
+
+- `GET /profile` — profile editor UI for personal info + fact library.
+
+### Quick start
+
+1. Install new dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+2. Configure `.env` (see `.env.example`) with Bedrock model IDs/region and optional LaTeX template path.
+
+3. Run web app:
+
+```bash
+uvicorn web.app:app --host 0.0.0.0 --port 8000
+```
+
+4. Upsert profile:
+
+```bash
+curl -X POST http://localhost:8000/api/profile/upsert \\
+  -H \"Content-Type: application/json\" \\
+  -d '{\n+    \"name\": \"Your Name\",\n+    \"location\": \"Boston, MA\",\n+    \"headline\": \"Software Engineer\",\n+    \"constraints\": {\"inference_mode\": \"light\"},\n+    \"facts\": [\n+      {\n+        \"fact_type\": \"experience\",\n+        \"source_section\": \"Experience\",\n+        \"raw_text\": \"Built retrieval-augmented pipelines using AWS Lambda and vector databases\",\n+        \"normalized_keywords\": [\"aws\", \"rag\", \"lambda\", \"vector database\"],\n+        \"priority\": 95,\n+        \"active\": true\n+      }\n+    ]\n+  }'\n+```
+
+5. Generate tailored resume:
+
+```bash
+curl -X POST http://localhost:8000/api/resume/generate \\
+  -H \"Content-Type: application/json\" \\
+  -d '{\n+    \"jd_text\": \"<paste job description>\",\n+    \"jd_url\": \"https://example.com/jobs/123\",\n+    \"page_title\": \"Software Engineer\",\n+    \"profile_id\": 1,\n+    \"target_role\": \"Software Engineer\",\n+    \"strictness\": \"balanced\",\n+    \"return_pdf_base64\": true\n+  }'\n+```
+
+### Extension
+
+See `extension/README.md` for Chrome setup and side-panel flow.
+
+### PDF generation notes
+
+- Primary path: compile LaTeX with `tectonic` (`TECTONIC_BIN` env var).
+- Fallback path: if Tectonic is unavailable, backend returns a fallback PDF with warnings so flow remains usable.
+
+### Bedrock adapter notes
+
+- Provider-specific call adapters are implemented for:
+  - Anthropic (messages schema)
+  - OpenAI on Bedrock (responses-style schema fallback)
+  - Amazon/Nova/Titan (Converse and legacy text schema fallback)
+- All model outputs are validated through strict step schemas before use.
+- If a model rejects on-demand throughput, set `RESUME_BEDROCK_INFERENCE_PROFILE_ID`
+  to a valid Bedrock inference profile ID/ARN; the app auto-retries with that profile.
