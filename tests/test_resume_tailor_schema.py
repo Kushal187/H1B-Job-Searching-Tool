@@ -12,8 +12,9 @@ def test_validate_parse_output_accepts_expected_shape():
         "skills": ["python", "aws"],
         "keywords": ["python", "aws", "api"],
     }
-    parsed = validate_parse_output(payload)
+    parsed, err = validate_parse_output(payload)
     assert parsed is not None
+    assert err == ""
     assert parsed["keywords"][0] == "python"
 
 

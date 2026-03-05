@@ -5,17 +5,30 @@ from __future__ import annotations
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 
-class ParseJDOutput(BaseModel):
-    requirements: list[str] = Field(default_factory=list, max_length=20)
-    responsibilities: list[str] = Field(default_factory=list, max_length=20)
-    skills: list[str] = Field(default_factory=list, max_length=40)
-    keywords: list[str] = Field(default_factory=list, max_length=20)
+_PARSE_LIMITS = {
+    "requirements": 20,
+    "responsibilities": 20,
+    "skills": 40,
+    "keywords": 20,
+}
 
-    @field_validator("requirements", "responsibilities", "skills", "keywords")
+
+class ParseJDOutput(BaseModel):
+    requirements: list[str] = Field(default_factory=list)
+    responsibilities: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+
+    @field_validator("requirements", "responsibilities", "skills", "keywords", mode="before")
     @classmethod
-    def _strip_items(cls, values: list[str]) -> list[str]:
+    def _coerce_and_cap(cls, values, info):
+        if isinstance(values, str):
+            values = [values]
+        if not isinstance(values, list):
+            return []
+        limit = _PARSE_LIMITS.get(info.field_name, 20)
         out = []
-        for value in values:
+        for value in values[:limit]:
             item = str(value).strip()
             if item:
                 out.append(item[:400])
@@ -92,11 +105,11 @@ class ValidateOutput(BaseModel):
         return out
 
 
-def validate_parse_output(payload: dict) -> dict | None:
+def validate_parse_output(payload: dict) -> tuple[dict | None, str]:
     try:
-        return ParseJDOutput.model_validate(payload).model_dump()
-    except ValidationError:
-        return None
+        return ParseJDOutput.model_validate(payload).model_dump(), ""
+    except ValidationError as exc:
+        return None, str(exc)
 
 
 def validate_rewrite_output(payload: dict) -> dict | None:

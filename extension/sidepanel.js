@@ -97,7 +97,7 @@ async function generateResume() {
     page_title: captured?.page_title || '',
     profile_id: profileId,
     target_role: captured?.role_title || '',
-    strictness: 'strict',
+    strictness: 'balanced',
     return_pdf_base64: true,
   };
 

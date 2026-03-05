@@ -78,11 +78,39 @@ class BedrockOrchestrator:
         self._runtime_warnings = []
         return warnings
 
+    _JD_KEY_ALIASES: dict[str, str] = {
+        "qualifications": "requirements",
+        "must_have": "requirements",
+        "required_qualifications": "requirements",
+        "minimum_qualifications": "requirements",
+        "duties": "responsibilities",
+        "job_duties": "responsibilities",
+        "key_responsibilities": "responsibilities",
+        "tech_stack": "skills",
+        "technologies": "skills",
+        "tools": "skills",
+        "technical_skills": "skills",
+        "tools_and_technologies": "skills",
+    }
+
+    @staticmethod
+    def _normalize_jd_keys(raw: dict) -> dict:
+        out: dict[str, list] = {}
+        for k, v in raw.items():
+            normalized = BedrockOrchestrator._JD_KEY_ALIASES.get(k, k)
+            if isinstance(v, str):
+                v = [v]
+            if normalized in out and isinstance(out[normalized], list) and isinstance(v, list):
+                out[normalized].extend(v)
+            else:
+                out[normalized] = v
+        return out
+
     def parse_jd(self, jd_text: str, usage: BedrockUsage) -> dict:
         prompt = (
             "You are a technical recruiter assistant. Parse the following job description "
             "and extract structured information.\n\n"
-            "Return ONLY valid JSON with these keys:\n"
+            "Return ONLY valid JSON with exactly these four keys:\n"
             '- "requirements": array of qualification requirements '
             '(e.g. "3+ years Python experience", "BS in Computer Science"). '
             "Extract 4-8 items.\n"
@@ -94,6 +122,13 @@ class BedrockOrchestrator:
             "including both technical and domain terms.\n\n"
             "Do not include soft skills, company values, or benefits. "
             "Do not wrap in markdown. Return raw JSON only.\n\n"
+            "Example output:\n"
+            "{\n"
+            '  "requirements": ["3+ years Python experience", "BS in Computer Science"],\n'
+            '  "responsibilities": ["Design and implement REST APIs", "Build CI/CD pipelines"],\n'
+            '  "skills": ["Python", "Kubernetes", "PostgreSQL", "Docker", "AWS"],\n'
+            '  "keywords": ["distributed systems", "microservices", "CI/CD", "cloud infrastructure"]\n'
+            "}\n\n"
             "Job description:\n"
             f"{jd_text[:14000]}"
         )
@@ -106,7 +141,11 @@ class BedrockOrchestrator:
                 len(content),
                 content[:200],
             )
-        parsed = validate_parse_output(raw_json or {})
+
+        if raw_json is not None:
+            raw_json = self._normalize_jd_keys(raw_json)
+
+        parsed, validation_err = validate_parse_output(raw_json or {})
         if parsed:
             if not parsed.get("keywords"):
                 parsed["keywords"] = extract_keywords(jd_text, top_k=16)
@@ -116,7 +155,11 @@ class BedrockOrchestrator:
             self._runtime_warnings.append(
                 "JD parser model JSON failed schema validation; using heuristic extraction."
             )
-            logger.warning("JD parser: JSON keys received: %s", list(raw_json.keys()) if raw_json else "empty")
+            logger.warning(
+                "JD parser: validation error: %s | keys received: %s",
+                validation_err,
+                list(raw_json.keys()),
+            )
         else:
             self._runtime_warnings.append(
                 "JD parser model output failed validation; using heuristic extraction."
