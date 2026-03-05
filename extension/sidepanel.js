@@ -139,7 +139,7 @@ function downloadPdf() {
   const url = URL.createObjectURL(blob);
   chrome.downloads.download({
     url,
-    filename: generated.filename || 'tailored-resume.pdf',
+    filename: 'Kushal_Pendekanti_Resume_SWE.pdf',
     saveAs: true,
   });
 }
