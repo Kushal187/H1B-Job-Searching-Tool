@@ -1,9 +1,5 @@
 chrome.runtime.onInstalled.addListener(async () => {
-  try {
-    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-  } catch (_) {
-    // Older Chrome versions may not support this API.
-  }
+  // Popup opens on click via default_popup; side panel override removed for Arc compatibility
 });
 
 async function openFallbackTab() {

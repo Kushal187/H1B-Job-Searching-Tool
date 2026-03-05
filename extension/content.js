@@ -302,7 +302,14 @@ async function captureJobPage() {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (!message || message.type !== 'CAPTURE_JD') return;
+  if (!message) return;
+
+  if (message.type === 'PING') {
+    sendResponse(true);
+    return false;
+  }
+
+  if (message.type !== 'CAPTURE_JD') return;
 
   captureJobPage()
     .then((payload) => sendResponse({ ok: true, payload }))

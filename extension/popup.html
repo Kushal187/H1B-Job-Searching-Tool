@@ -6,35 +6,44 @@
   <title>Resume Autotailor</title>
   <link rel="stylesheet" href="sidepanel.css" />
   <style>
-    body { min-width: 420px; min-height: 620px; }
+    body { width: 400px; min-height: 540px; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Resume Autotailor</h1>
-    <p class="sub">Capture JD from current page, generate, then download PDF.</p>
+    <header class="header">
+      <div class="logo">RT</div>
+      <div>
+        <h1>Resume Autotailor</h1>
+        <p class="sub">Capture JD, generate a tailored resume PDF.</p>
+      </div>
+    </header>
 
-    <label>API Base URL</label>
-    <input id="apiBase" type="text" placeholder="http://localhost:8000" />
+    <details class="settings-toggle">
+      <summary>Settings</summary>
+      <div class="settings-body">
+        <label for="apiBase">API Base URL</label>
+        <input id="apiBase" type="text" placeholder="http://localhost:8000" />
+        <label for="profileId">Profile ID</label>
+        <input id="profileId" type="number" min="1" placeholder="1" />
+      </div>
+    </details>
 
-    <label>Profile ID</label>
-    <input id="profileId" type="number" min="1" placeholder="1" />
-
-    <div class="row">
-      <button id="captureBtn" class="secondary">Capture JD</button>
-      <button id="generateBtn" class="primary">Generate PDF</button>
+    <div class="actions">
+      <button id="captureBtn" class="btn secondary">Capture JD</button>
+      <button id="generateBtn" class="btn primary">Generate PDF</button>
     </div>
 
-    <label>JD Text (editable fallback)</label>
-    <textarea id="jdText" rows="12" placeholder="If extraction fails, paste JD here."></textarea>
+    <label for="jdText">Job Description</label>
+    <textarea id="jdText" rows="10" placeholder="Click Capture or paste JD here..."></textarea>
 
-    <div class="row">
-      <button id="downloadBtn" class="secondary" disabled>Download PDF</button>
-      <span id="status"></span>
+    <div class="footer-row">
+      <button id="downloadBtn" class="btn accent" disabled>Download PDF</button>
+      <span id="status" class="status"></span>
     </div>
 
     <div id="warnings" class="warnings"></div>
-    <pre id="meta"></pre>
+    <pre id="meta" class="meta"></pre>
   </div>
 
   <script src="sidepanel.js"></script>
