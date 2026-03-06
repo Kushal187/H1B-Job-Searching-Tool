@@ -54,7 +54,7 @@ class ResumeGenerateRequest(BaseModel):
     page_title: str = Field(default="", max_length=400)
     profile_id: int
     target_role: str = Field(default="", max_length=120)
-    strictness: Literal["strict", "balanced", "light"] = "balanced"
+    strictness: Literal["strict", "balanced", "light"] = "light"
     return_pdf_base64: bool = True
 
 

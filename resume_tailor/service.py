@@ -58,6 +58,8 @@ class ResumeTailorService:
         if not profile:
             return ValidationResult(warnings=["Profile not found"])
 
+        active_facts = [f for f in profile["facts"] if f.get("active", True)]
+
         usage = BedrockUsage()
         jd = normalize_text(payload.jd_text, max_chars=self.max_jd_chars)
         jd_keywords = extract_keywords(jd, top_k=18)
@@ -68,7 +70,7 @@ class ResumeTailorService:
             jd_keywords=jd_keywords,
             generated_summary=payload.generated_summary,
             generated_bullets=payload.generated_bullets,
-            facts=profile["facts"],
+            facts=active_facts,
             usage=usage,
         )
 
@@ -102,6 +104,8 @@ class ResumeTailorService:
             )
             self.orchestrator.rewriter_model = self.orchestrator.parser_model
 
+        active_facts = [f for f in profile["facts"] if f.get("active", True)]
+
         jd = normalize_text(payload.jd_text, max_chars=self.max_jd_chars)
         template = load_template()
         role_targets = extract_macro_role_targets(template)
@@ -110,7 +114,7 @@ class ResumeTailorService:
             jd_keywords = jd_summary.get("keywords") or extract_keywords(jd, top_k=16)
             rewritten = self.orchestrator.rewrite(
                 jd_summary,
-                profile["facts"],
+                active_facts,
                 usage,
                 strictness=payload.strictness,
                 role_targets=role_targets,

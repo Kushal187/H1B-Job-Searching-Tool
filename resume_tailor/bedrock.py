@@ -218,8 +218,12 @@ class BedrockOrchestrator:
         )
         if strictness == "light":
             strictness_note = (
-                "Prefer factual grounding. Minor paraphrasing is allowed, but do not "
-                "invent company alignment or unsupported achievements."
+                "Write in polished, high-impact resume language. Prefer concise, "
+                "recruiter-friendly abstractions over literal restatement. You may "
+                "abstract upward (e.g. 'national learning platform' instead of a "
+                "specific product name) for stronger framing. Preserve all technologies, "
+                "metrics, and concrete numerical facts exactly. Do not invent new metrics, "
+                "company names, or technologies that are absent from the candidate facts."
             )
         elif strictness == "strict":
             strictness_note = (
@@ -242,22 +246,40 @@ class BedrockOrchestrator:
             )
 
         prompt = (
-            "You are a resume tailoring expert who rewrites resume bullet points for "
-            "ATS optimization while keeping every claim factually grounded.\n\n"
+            "You are a resume tailoring expert. Your job is to rewrite resume bullets "
+            "so they are SPECIFICALLY TAILORED to the target job description below. "
+            "Every bullet you write must be grounded in the candidate's real facts, "
+            "but the EMPHASIS, KEYWORD CHOICE, and FRAMING must shift to match "
+            "what THIS specific JD asks for.\n\n"
 
-            "TASK: Rewrite the candidate's experience into tailored resume bullets that "
-            "match the target job description.\n\n"
+            "TAILORING STRATEGY (CRITICAL):\n"
+            "1. Read the JD requirements, responsibilities, skills, and keywords carefully.\n"
+            "2. For each role, pick the candidate facts that BEST match the JD's needs. "
+            "Lead with the most JD-relevant achievement in each role.\n"
+            "3. Weave JD keywords and technologies into bullets WHERE the candidate "
+            "genuinely used them. If the JD says 'microservices' and the candidate "
+            "built microservices, use that exact word. If the JD says 'CI/CD' and the "
+            "candidate set up pipelines, mention CI/CD explicitly.\n"
+            "4. The summary MUST directly address the JD's core requirements — mention "
+            "the specific domain, technologies, or role type the JD emphasizes.\n"
+            "5. The skills_line MUST be reordered to lead with skills the JD prioritizes, "
+            "and should include JD-mentioned skills the candidate actually has.\n"
+            "6. If the JD emphasizes a domain (e.g. fintech, healthcare, e-commerce, "
+            "AI/ML), frame the candidate's experience toward that domain where honest.\n"
+            "7. Two resumes generated for DIFFERENT JDs should look noticeably different "
+            "in emphasis, keyword density, and bullet ordering — even though they draw "
+            "from the same candidate facts.\n\n"
 
             "OUTPUT FORMAT:\n"
             "Return ONLY valid JSON (no markdown fences, no commentary) with this exact schema:\n"
             "{\n"
             '  "summary": "A 1-2 sentence professional summary highlighting the candidate\'s '
-            'strongest relevant qualifications for this specific role.",\n'
+            'strongest relevant qualifications for THIS SPECIFIC role and JD.",\n'
             '  "roles": [\n'
             '    {"title": "exact role title", "company": "exact company name", '
             '"bullets": ["bullet1", "bullet2", "bullet3"]}\n'
             "  ],\n"
-            '  "skills_line": "Comma-separated list of technical skills relevant to the JD"\n'
+            '  "skills_line": "Comma-separated technical skills, ordered by JD relevance"\n'
             "}\n\n"
 
             "BULLET WRITING RULES:\n"
@@ -266,42 +288,24 @@ class BedrockOrchestrator:
             "- Include quantifiable impact (numbers, percentages, scale) ONLY when "
             "directly supported by the candidate facts. Use % for percentages.\n"
             "- Target 20-35 words per bullet. Be concise — the resume must fit on ONE page.\n"
-            "- Naturally incorporate keywords from the JD requirements and skills.\n"
+            "- ACTIVELY incorporate keywords from the JD requirements and skills into "
+            "bullet phrasing. Don't just mention them — integrate them naturally into "
+            "the achievement description.\n"
             "- Write 3 bullets per role (4 only if the role is the most recent or most relevant). "
             "Only include bullets you can fully support with the candidate facts.\n"
+            "- Prefer polished, outcome-oriented phrasing over literal restatement of facts. "
+            "Frame work in terms of impact and scope rather than raw implementation details.\n"
             "- Do NOT use these special characters: $ { } \\ & # _ ~ ^  "
             "(% is OK for percentages).\n\n"
 
             f"GROUNDING RULE ({strictness}):\n"
             f"{strictness_note}\n"
             "Every claim must trace back to at least one candidate fact. "
-            "If a JD requirement has no matching fact, omit it.\n\n"
-
-            "EXAMPLE OUTPUT:\n"
-            "{\n"
-            '  "summary": "Software engineer with 3 years of experience building '
-            "scalable backend systems and deploying production AI services, with "
-            'demonstrated impact in reducing latency and improving reliability.",\n'
-            '  "roles": [\n'
-            "    {\n"
-            '      "title": "Software Engineer",\n'
-            '      "company": "Acme Corp",\n'
-            '      "bullets": [\n'
-            '        "Reduced API response latency by 40% by implementing Redis '
-            'caching layer across 12 microservices serving 50K daily requests.",\n'
-            '        "Built event-driven data pipeline processing 100K records daily '
-            'using Apache Kafka and Python, improving data freshness from hours to minutes.",\n'
-            '        "Deployed containerized ML inference service on AWS ECS, enabling '
-            'real-time predictions with 99.9% uptime."\n'
-            "      ]\n"
-            "    }\n"
-            "  ],\n"
-            '  "skills_line": "Python, Java, AWS, Docker, PostgreSQL, Redis, Kafka"\n'
-            "}\n\n"
+            "If a JD requirement has no matching fact, omit it — do NOT fabricate experience.\n\n"
 
             "---\n\n"
 
-            "JOB DESCRIPTION SUMMARY:\n"
+            "JOB DESCRIPTION SUMMARY (tailor to THIS):\n"
             f"{json.dumps(jd_summary, ensure_ascii=True)}\n\n"
 
             f"ROLE TARGETS:\n{roles_instruction}\n"
@@ -486,7 +490,7 @@ class BedrockOrchestrator:
                     }
                 ],
                 inferenceConfig={
-                    "temperature": 0.2,
+                    "temperature": 0.05,
                     "topP": 0.9,
                     "maxTokens": self.max_tokens,
                 },
@@ -509,7 +513,7 @@ class BedrockOrchestrator:
         body = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": self.max_tokens,
-            "temperature": 0.2,
+            "temperature": 0.05,
             "messages": [
                 {
                     "role": "user",
@@ -546,7 +550,7 @@ class BedrockOrchestrator:
                 }
             ],
             "max_output_tokens": self.max_tokens,
-            "temperature": 0.2,
+            "temperature": 0.05,
         }
         def _call(target_model_id: str):
             return client.invoke_model(modelId=target_model_id, body=json.dumps(body))
@@ -582,7 +586,7 @@ class BedrockOrchestrator:
                 }
             ],
             "max_tokens": self.max_tokens,
-            "temperature": 0.2,
+            "temperature": 0.05,
         }
 
         def _call(target_model_id: str):
@@ -620,7 +624,7 @@ class BedrockOrchestrator:
             "inputText": prompt,
             "textGenerationConfig": {
                 "maxTokenCount": self.max_tokens,
-                "temperature": 0.2,
+                "temperature": 0.05,
                 "topP": 0.9,
             },
         }
