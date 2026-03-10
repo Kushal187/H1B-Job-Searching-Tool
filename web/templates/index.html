@@ -108,6 +108,9 @@
     <button id="saved-only-toggle" type="button" class="border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors">
       Saved only
     </button>
+    <button id="hide-seen-toggle" type="button" class="border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors">
+      Hide seen
+    </button>
     <span id="result-count" class="text-xs text-gray-400 ml-auto"></span>
   </div>
 
@@ -135,11 +138,11 @@
   };
 
   let currentPage = 1, currentSearch = '', currentCompany = '', currentSort = 'posted_desc', currentFreshness = '', currentProfile = '';
-  let currentShowApplied = false, currentSavedOnly = false;
+  let currentShowApplied = false, currentSavedOnly = false, currentHideSeen = true;
   let activeTag = null;
   let profileOptionsLoaded = false;
   let lastJobsResponse = null;
-  let triageState = { saved: {}, applied: {} };
+  let triageState = { saved: {}, applied: {}, hidden: {} };
 
   function formatDate(dateStr) {
     if (!dateStr) return { relative: '\u2014', full: '' };
@@ -216,6 +219,7 @@
       sort: currentSort,
       showApplied: currentShowApplied,
       savedOnly: currentSavedOnly,
+      hideSeen: currentHideSeen,
     });
   }
 
@@ -234,9 +238,11 @@
     currentSort = viewState.sort || 'posted_desc';
     currentShowApplied = Boolean(viewState.showApplied || viewState.showSeen);
     currentSavedOnly = Boolean(viewState.savedOnly);
+    currentHideSeen = viewState.hideSeen !== false;
     triageState = {
-      saved: storedTriage.saved || storedTriage.hidden || {},
+      saved: storedTriage.saved || {},
       applied: storedTriage.applied || storedTriage.seen || storedTriage.reviewed || {},
+      hidden: storedTriage.hidden || storedTriage.seenToday || {},
     };
     pruneLegacyTriageState();
     persistTriageState();
@@ -380,6 +386,7 @@
     const configs = [
       { id: 'show-applied-toggle', active: currentShowApplied },
       { id: 'saved-only-toggle', active: currentSavedOnly },
+      { id: 'hide-seen-toggle', active: currentHideSeen },
     ];
 
     configs.forEach(({ id, active }) => {
@@ -406,12 +413,17 @@
     return Boolean(triageState.applied[getJobKey(job)]);
   }
 
+  function isHiddenJob(job) {
+    return Boolean(triageState.hidden?.[getJobKey(job)]);
+  }
+
   function applyClientJobFilters(jobs) {
     return jobs.filter(job => {
       if (currentSavedOnly && !isSavedJob(job)) return false;
       if (!currentSavedOnly && isSavedJob(job)) return false;
       if (currentShowApplied && !isAppliedJob(job)) return false;
       if (!currentShowApplied && isAppliedJob(job)) return false;
+      if (currentHideSeen && isHiddenJob(job)) return false;
       return true;
     });
   }
@@ -439,6 +451,7 @@
     if (currentFreshness) items.push({ kind: 'freshness', label: `Freshness: ${currentFreshness}` });
     if (currentShowApplied) items.push({ kind: 'show_applied', label: 'Show applied' });
     if (currentSavedOnly) items.push({ kind: 'saved_only', label: 'Saved only' });
+    if (currentHideSeen) items.push({ kind: 'hide_seen', label: 'Hide seen' });
 
     if (!items.length) {
       wrap.classList.add('hidden');
@@ -488,6 +501,7 @@
     currentSort = 'posted_desc';
     currentShowApplied = false;
     currentSavedOnly = false;
+    currentHideSeen = true;
     clearActiveTag();
     document.getElementById('search').value = '';
     document.getElementById('company-filter').value = '';
@@ -529,6 +543,13 @@
       renderActiveFilters();
       renderCurrentJobsView();
       return;
+    } else if (kind === 'hide_seen') {
+      currentHideSeen = false;
+      syncWorkflowToggles();
+      persistViewState();
+      renderActiveFilters();
+      renderCurrentJobsView();
+      return;
     }
 
     loadJobs();
@@ -542,6 +563,9 @@
     if (kind === 'saved') {
       currentSavedOnly = !currentSavedOnly;
       if (currentSavedOnly) currentShowApplied = false;
+    }
+    if (kind === 'hide_seen') {
+      currentHideSeen = !currentHideSeen;
     }
     syncWorkflowToggles();
     persistViewState();
@@ -559,6 +583,9 @@
     } else if (action === 'save') {
       if (triageState.saved[key]) delete triageState.saved[key];
       else triageState.saved[key] = new Date().toISOString();
+    } else if (action === 'hide') {
+      if (triageState.hidden[key]) delete triageState.hidden[key];
+      else triageState.hidden[key] = true;
     }
 
     persistTriageState();
@@ -596,6 +623,7 @@
       const key = getJobKey(job);
       const isSaved = isSavedJob(job);
       const isApplied = isAppliedJob(job);
+      const isHidden = isHiddenJob(job);
       const h1b = job.h1b_approvals > 0
         ? `<span class="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs px-2 py-0.5 rounded-full">${job.h1b_approvals} H1B</span>`
         : '';
@@ -655,6 +683,10 @@
                 <button type="button" data-job-action="save" data-job-key="${esc(key)}"
                   class="${isSaved ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100 hover:border-gray-400'} inline-flex items-center px-2.5 py-1 rounded-full text-[11px] border transition-colors">
                   ${isSaved ? 'Saved' : 'Save'}
+                </button>
+                <button type="button" data-job-action="hide" data-job-key="${esc(key)}"
+                  class="${isHidden ? 'bg-gray-600 text-white border-gray-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100 hover:border-gray-400'} inline-flex items-center px-2.5 py-1 rounded-full text-[11px] border transition-colors">
+                  ${isHidden ? 'Hidden' : 'Hide'}
                 </button>
               </div>
             </div>
@@ -732,6 +764,7 @@
   document.getElementById('sort').addEventListener('change', (e) => { currentSort = e.target.value; currentPage = 1; loadJobs(); });
   document.getElementById('show-applied-toggle').addEventListener('click', () => toggleWorkflowMode('applied'));
   document.getElementById('saved-only-toggle').addEventListener('click', () => toggleWorkflowMode('saved'));
+  document.getElementById('hide-seen-toggle').addEventListener('click', () => toggleWorkflowMode('hide_seen'));
   document.getElementById('clear-saved').addEventListener('click', clearSavedJobs);
   document.getElementById('clear-filters').addEventListener('click', clearAllFilters);
   document.getElementById('active-filter-chips').addEventListener('click', (e) => {

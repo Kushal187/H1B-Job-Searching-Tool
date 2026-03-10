@@ -136,6 +136,9 @@ JOB_PROFILE_TERMS: dict[str, dict[str, str | tuple[str, ...]]] = {
         "terms": (
             "software engineer",
             "software developer",
+            "software development engineer",
+            "software development",
+            "software engineering",
             "swe",
             "sde",
             "backend engineer",
