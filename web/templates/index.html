@@ -102,6 +102,13 @@
       <option value="priority_desc">Priority score</option>
       <option value="title_asc">Title A-Z</option>
     </select>
+    <select id="experience-filter" class="border border-gray-300 rounded px-3 py-1.5 text-xs focus:outline-none focus:border-gray-500">
+      <option value="">Any experience</option>
+      <option value="0">Entry level (0 yrs)</option>
+      <option value="1">&le; 1 year</option>
+      <option value="2">&le; 2 years</option>
+      <option value="3">&le; 3 years</option>
+    </select>
     <button id="show-applied-toggle" type="button" class="border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors">
       Show applied
     </button>
@@ -137,7 +144,7 @@
     triage: 'jobs:triage-state:v1',
   };
 
-  let currentPage = 1, currentSearch = '', currentCompany = '', currentSort = 'posted_desc', currentFreshness = '', currentProfile = '';
+  let currentPage = 1, currentSearch = '', currentCompany = '', currentSort = 'posted_desc', currentFreshness = '', currentProfile = '', currentMaxExperience = '';
   let currentShowApplied = false, currentSavedOnly = false, currentHideSeen = true;
   let activeTag = null;
   let profileOptionsLoaded = false;
@@ -216,6 +223,7 @@
       profile: currentProfile,
       company: currentCompany,
       freshness: currentFreshness,
+      maxExperience: currentMaxExperience,
       sort: currentSort,
       showApplied: currentShowApplied,
       savedOnly: currentSavedOnly,
@@ -235,6 +243,7 @@
     currentProfile = viewState.profile || '';
     currentCompany = viewState.company || '';
     currentFreshness = viewState.freshness || '';
+    currentMaxExperience = viewState.maxExperience || '';
     currentSort = viewState.sort || 'posted_desc';
     currentShowApplied = Boolean(viewState.showApplied || viewState.showSeen);
     currentSavedOnly = Boolean(viewState.savedOnly);
@@ -249,6 +258,7 @@
 
     document.getElementById('search').value = currentSearch;
     document.getElementById('freshness-filter').value = currentFreshness;
+    document.getElementById('experience-filter').value = currentMaxExperience;
     document.getElementById('sort').value = currentSort;
   }
 
@@ -258,6 +268,7 @@
       profile: currentProfile,
       company: currentCompany,
       freshness: currentFreshness,
+      max_experience: currentMaxExperience,
       sort: currentSort,
       page: currentPage,
       per_page: 50
@@ -449,6 +460,10 @@
     if (currentSearch) items.push({ kind: 'search', label: `Search: ${currentSearch}` });
     if (currentCompany) items.push({ kind: 'company', label: `Company: ${currentCompany}` });
     if (currentFreshness) items.push({ kind: 'freshness', label: `Freshness: ${currentFreshness}` });
+    if (currentMaxExperience) {
+      const expLabels = {'0': 'Entry level', '1': '\u2264 1 year', '2': '\u2264 2 years', '3': '\u2264 3 years'};
+      items.push({ kind: 'max_experience', label: `Experience: ${expLabels[currentMaxExperience] || currentMaxExperience}` });
+    }
     if (currentShowApplied) items.push({ kind: 'show_applied', label: 'Show applied' });
     if (currentSavedOnly) items.push({ kind: 'saved_only', label: 'Saved only' });
     if (currentHideSeen) items.push({ kind: 'hide_seen', label: 'Hide seen' });
@@ -497,6 +512,7 @@
     currentSearch = '';
     currentCompany = '';
     currentFreshness = '';
+    currentMaxExperience = '';
     currentProfile = '';
     currentSort = 'posted_desc';
     currentShowApplied = false;
@@ -506,6 +522,7 @@
     document.getElementById('search').value = '';
     document.getElementById('company-filter').value = '';
     document.getElementById('freshness-filter').value = '';
+    document.getElementById('experience-filter').value = '';
     document.getElementById('sort').value = 'posted_desc';
     syncProfileButtons();
     syncQuickTags();
@@ -529,6 +546,9 @@
     } else if (kind === 'freshness') {
       currentFreshness = '';
       document.getElementById('freshness-filter').value = '';
+    } else if (kind === 'max_experience') {
+      currentMaxExperience = '';
+      document.getElementById('experience-filter').value = '';
     } else if (kind === 'show_applied') {
       currentShowApplied = false;
       syncWorkflowToggles();
@@ -761,6 +781,7 @@
 
   document.getElementById('freshness-filter').addEventListener('change', (e) => { currentFreshness = e.target.value; currentPage = 1; loadJobs(); });
   document.getElementById('company-filter').addEventListener('change', (e) => { currentCompany = e.target.value; currentPage = 1; loadJobs(); });
+  document.getElementById('experience-filter').addEventListener('change', (e) => { currentMaxExperience = e.target.value; currentPage = 1; loadJobs(); });
   document.getElementById('sort').addEventListener('change', (e) => { currentSort = e.target.value; currentPage = 1; loadJobs(); });
   document.getElementById('show-applied-toggle').addEventListener('click', () => toggleWorkflowMode('applied'));
   document.getElementById('saved-only-toggle').addEventListener('click', () => toggleWorkflowMode('saved'));

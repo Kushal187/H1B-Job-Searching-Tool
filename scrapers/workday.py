@@ -414,8 +414,8 @@ class WorkdayScraper(BaseScraper):
             INSERT INTO job_listings
                 (company_id, company_name, ats_system, job_title, job_location,
                  job_url, department, scraped_at, first_seen_at, last_seen_at,
-                 posted_at, is_active, raw_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+                 posted_at, is_active, raw_json, experience_years)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
             ON CONFLICT(job_url) DO UPDATE SET
                 scraped_at = excluded.scraped_at,
                 last_seen_at = excluded.last_seen_at,
@@ -447,6 +447,7 @@ class WorkdayScraper(BaseScraper):
                 scraped_at,  # last_seen_at
                 fields["posted_at"],
                 json.dumps(job),
+                None,  # experience_years (Workday has no descriptions)
             )
 
             try:

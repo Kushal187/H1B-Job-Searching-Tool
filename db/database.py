@@ -416,6 +416,8 @@ def _sqlite_migrations() -> list[str]:
         )""",
         "CREATE INDEX IF NOT EXISTS idx_workday_tenant ON workday_boards(tenant)",
         "CREATE INDEX IF NOT EXISTS idx_workday_normalized ON workday_boards(normalized_name)",
+        # Experience-level parsing from job descriptions
+        "ALTER TABLE job_listings ADD COLUMN experience_years INTEGER",
     ]
 
 
@@ -445,6 +447,8 @@ def _postgres_migrations() -> list[str]:
         )""",
         "CREATE INDEX IF NOT EXISTS idx_workday_tenant ON workday_boards(tenant)",
         "CREATE INDEX IF NOT EXISTS idx_workday_normalized ON workday_boards(normalized_name)",
+        # Experience-level parsing from job descriptions
+        "ALTER TABLE job_listings ADD COLUMN IF NOT EXISTS experience_years INTEGER",
     ]
 
 
@@ -459,6 +463,13 @@ def _migrate():
             except sqlite3.OperationalError:
                 # SQLite migration may re-run on existing columns/indexes.
                 pass
+
+    # Backfill experience_years from existing job descriptions (best-effort)
+    try:
+        from scrapers.experience_parser import backfill_experience_years
+        backfill_experience_years()
+    except Exception as e:
+        print(f"  Experience backfill skipped: {e}")
 
 
 def insert_many(table: str, rows: list[dict], conn=None):

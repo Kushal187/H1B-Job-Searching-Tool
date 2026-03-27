@@ -326,6 +326,7 @@ class BaseScraper(ABC):
         Returns the number of newly inserted jobs.
         """
         from db import database
+        from scrapers.experience_parser import extract_description, parse_experience_years
 
         # Reuse one connection for the whole company/ATS upsert to avoid
         # opening a new DB connection per job row.
@@ -340,13 +341,14 @@ class BaseScraper(ABC):
             INSERT INTO job_listings
                 (company_id, company_name, ats_system, job_title, job_location,
                  job_url, department, scraped_at, first_seen_at, last_seen_at,
-                 posted_at, is_active, raw_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+                 posted_at, is_active, raw_json, experience_years)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
             ON CONFLICT(job_url) DO UPDATE SET
                 scraped_at = excluded.scraped_at,
                 last_seen_at = excluded.last_seen_at,
                 is_active = 1,
-                raw_json = excluded.raw_json
+                raw_json = excluded.raw_json,
+                experience_years = excluded.experience_years
         """
         )
         check_sql = database.adapt_sql(
@@ -357,6 +359,9 @@ class BaseScraper(ABC):
         for job in jobs:
             fields = self.extract_job_fields(job)
             job_url = fields["job_url"]
+
+            description = extract_description(job, self.ats_name)
+            exp_years = parse_experience_years(description) if description else None
 
             params = (
                 company_id,
@@ -371,6 +376,7 @@ class BaseScraper(ABC):
                 scraped_at,  # last_seen_at (updated on every upsert)
                 fields["posted_at"],
                 json.dumps(job),
+                exp_years,
             )
 
             try:

@@ -82,7 +82,7 @@ USCIS_LOCAL_FILES = [
 
 # ─── Scraping Configuration ──────────────────────────────────────────────────
 
-GREENHOUSE_API_URL = "https://boards-api.greenhouse.io/v1/boards/{company}/jobs"
+GREENHOUSE_API_URL = "https://boards-api.greenhouse.io/v1/boards/{company}/jobs?content=true"
 LEVER_API_URL = "https://api.lever.co/v0/postings/{company}"
 ASHBY_API_URL = "https://api.ashbyhq.com/posting-api/job-board/{company}"
 WORKDAY_DIR = os.path.join(JOBS_DATA_DIR, "workday")

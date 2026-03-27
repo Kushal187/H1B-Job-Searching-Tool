@@ -216,6 +216,7 @@ def _build_job_filter_clause(
     profile: str = "",
     company: str = "",
     freshness: str = "",
+    max_experience: str = "",
     active: str = "true",
 ) -> tuple[str, list[str]]:
     """Build the shared WHERE clause used by jobs and stats endpoints."""
@@ -252,6 +253,14 @@ def _build_job_filter_clause(
         conditions.append(f"{POSTED_DATE_EXPR} >= datetime('now', '-24 hours')")
     elif freshness == "48h":
         conditions.append(f"{POSTED_DATE_EXPR} >= datetime('now', '-48 hours')")
+
+    if max_experience and max_experience != "any":
+        try:
+            max_val = int(max_experience)
+            conditions.append("(j.experience_years IS NULL OR j.experience_years <= ?)")
+            params.append(str(max_val))
+        except ValueError:
+            pass
 
     where = "WHERE " + " AND ".join(conditions) if conditions else ""
     return where, params
@@ -299,6 +308,7 @@ async def get_stats(
     profile: str = Query("", description="Preset combined role filter"),
     company: str = Query("", description="Filter by company name"),
     freshness: str = Query("", description="Filter: '24h' or '48h' for recent jobs"),
+    max_experience: str = Query("", description="Max years of experience"),
     active: str = Query(
         "true", description="Filter active jobs only ('true'/'false'/'all')"
     ),
@@ -310,6 +320,7 @@ async def get_stats(
             profile=profile,
             company=company,
             freshness=freshness,
+            max_experience=max_experience,
             active=active,
         )
 
@@ -381,6 +392,7 @@ async def get_jobs(
     profile: str = Query("", description="Preset combined role filter"),
     company: str = Query("", description="Filter by company name"),
     freshness: str = Query("", description="Filter: '24h' or '48h' for recent jobs"),
+    max_experience: str = Query("", description="Max years of experience"),
     active: str = Query(
         "true", description="Filter active jobs only ('true'/'false'/'all')"
     ),
@@ -394,6 +406,7 @@ async def get_jobs(
         profile=profile,
         company=company,
         freshness=freshness,
+        max_experience=max_experience,
         active=active,
     )
 
@@ -419,7 +432,8 @@ async def get_jobs(
             {POSTED_DATE_EXPR} as posted_date,
             COALESCE(m.priority_score, 0) as priority_score,
             COALESCE(m.h1b_approval_count, 0) as h1b_approvals,
-            m.source
+            m.source,
+            j.experience_years
         FROM job_listings j
         LEFT JOIN matched_companies m ON j.company_id = m.id
         {where}
@@ -445,6 +459,7 @@ async def get_jobs(
                 "priority_score": row["priority_score"],
                 "h1b_approvals": row["h1b_approvals"],
                 "source": row["source"],
+                "experience_years": row["experience_years"],
             }
         )
 

@@ -74,7 +74,8 @@ CREATE TABLE IF NOT EXISTS job_listings (
     last_seen_at TEXT,    -- when we last saw this job on the ATS
     posted_at TEXT,       -- original publish date from the ATS
     is_active INTEGER DEFAULT 1,  -- 0 = removed from ATS, 1 = still listed
-    raw_json TEXT
+    raw_json TEXT,
+    experience_years INTEGER      -- parsed min years of experience (NULL = unknown)
 );
 
 -- Indexes for fast matching lookups
