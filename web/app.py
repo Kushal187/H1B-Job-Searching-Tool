@@ -272,13 +272,13 @@ def _build_job_filter_clause(
 @app.get("/", response_class=HTMLResponse)
 async def page_index(request: Request):
     """Jobs homepage."""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("index.html", context={"request": request})
 
 
 @app.get("/companies", response_class=HTMLResponse)
 async def page_companies(request: Request):
     """Companies browser page."""
-    return templates.TemplateResponse("companies.html", {"request": request})
+    return templates.TemplateResponse("companies.html", context={"request": request})
 
 
 @app.get("/companies/{company_name:path}", response_class=HTMLResponse)
@@ -286,7 +286,7 @@ async def page_company_detail(request: Request, company_name: str):
     """Single company detail page."""
     return templates.TemplateResponse(
         "company_detail.html",
-        {
+        context={
             "request": request,
             "company_name": unquote(company_name),
         },
@@ -296,7 +296,7 @@ async def page_company_detail(request: Request, company_name: str):
 @app.get("/admin", response_class=HTMLResponse)
 async def page_admin(request: Request):
     """Admin dashboard page."""
-    return templates.TemplateResponse("admin.html", {"request": request})
+    return templates.TemplateResponse("admin.html", context={"request": request})
 
 
 # ── API: Stats ───────────────────────────────────────────────────────────────
