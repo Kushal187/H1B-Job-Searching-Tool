@@ -4,7 +4,6 @@ Extracts the minimum years of experience mentioned in a job posting's
 description text and provides an ATS-aware description extractor.
 """
 
-import json
 import re
 
 # ── HTML tag stripper ────────────────────────────────────────────────────────
@@ -84,33 +83,3 @@ def extract_description(raw_json: dict, ats_system: str) -> str | None:
     return None
 
 
-# ── Backfill utility ─────────────────────────────────────────────────────────
-
-
-def backfill_experience_years():
-    """Parse experience_years from raw_json for existing jobs missing it."""
-    from db import database
-
-    rows = database.query(
-        "SELECT id, raw_json, ats_system FROM job_listings "
-        "WHERE experience_years IS NULL AND raw_json IS NOT NULL "
-        "AND ats_system != 'workday'"
-    )
-
-    updated = 0
-    for row in rows:
-        raw = row["raw_json"]
-        if isinstance(raw, str):
-            raw = json.loads(raw)
-        desc = extract_description(raw, row["ats_system"])
-        if not desc:
-            continue
-        exp = parse_experience_years(desc)
-        if exp is not None:
-            database.execute(
-                "UPDATE job_listings SET experience_years = ? WHERE id = ?",
-                (exp, row["id"]),
-            )
-            updated += 1
-
-    print(f"  Backfilled experience_years for {updated} jobs")

@@ -464,13 +464,6 @@ def _migrate():
                 # SQLite migration may re-run on existing columns/indexes.
                 pass
 
-    # Backfill experience_years from existing job descriptions (best-effort)
-    try:
-        from scrapers.experience_parser import backfill_experience_years
-        backfill_experience_years()
-    except Exception as e:
-        print(f"  Experience backfill skipped: {e}")
-
 
 def insert_many(table: str, rows: list[dict], conn=None):
     """Bulk insert a list of dicts into a table."""
