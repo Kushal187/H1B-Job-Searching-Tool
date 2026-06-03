@@ -104,7 +104,7 @@ Admin routes are `/admin` and `/api/admin/*`.
 - To disable admin routes entirely, set:
   - `ADMIN_DISABLED=true`
 
-## GitHub Actions (every 6 hours)
+## GitHub Actions (every 8 hours)
 
 Workflow file: `.github/workflows/monitor-supabase.yml`
 
@@ -115,7 +115,7 @@ Set repository secrets:
 
 The workflow:
 
-1. Runs every 6 hours (UTC) and on manual dispatch.
+1. Runs every 8 hours (UTC) and on manual dispatch.
 2. Resolves `DATABASE_URL` from `SUPABASE_DB_URL`, or from `SUPABASE_PROJECT_REF` + `SUPABASE_DB_PASSWORD`.
 3. Initializes schema in Supabase.
 4. Runs monitor scrape + export on each run.
