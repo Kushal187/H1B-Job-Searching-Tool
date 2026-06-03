@@ -197,6 +197,21 @@ class BaseScraper(ABC):
                     pass
         return config.SCRAPE_RETRY_BACKOFF * (2**attempt)
 
+    # ── Citizenship / clearance filter ───────────────────────────────────
+
+    def _is_citizenship_restricted(self, job: dict) -> bool:
+        """Return True if the job description requires U.S. citizenship/clearance.
+
+        Uses the ATS-aware description extractor; ATS systems that don't return
+        a description in the list response (e.g. Workday) always yield False
+        here, so those boards rely on the company-level blocklist instead.
+        """
+        from scrapers.citizenship_filter import requires_us_citizenship
+        from scrapers.experience_parser import extract_description
+
+        description = extract_description(job, self.ats_name)
+        return bool(description) and requires_us_citizenship(description)
+
     # ── Shared scraping flow ─────────────────────────────────────────────
 
     def scrape(
@@ -254,7 +269,11 @@ class BaseScraper(ABC):
             if self.skip_if_board_empty and not all_jobs:
                 return None
 
-            jobs = [j for j in all_jobs if self.is_job_relevant(j)]
+            jobs = [
+                j
+                for j in all_jobs
+                if self.is_job_relevant(j) and not self._is_citizenship_restricted(j)
+            ]
             scraped_at = datetime.now(timezone.utc).isoformat()
 
             if jobs:

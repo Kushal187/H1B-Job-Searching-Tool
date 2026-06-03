@@ -315,8 +315,15 @@ class WorkdayScraper(BaseScraper):
                     "scraped_at": scraped_at,
                 }
 
-            # Filter to relevant US entry-level jobs
-            jobs = [j for j in all_postings if self.is_job_relevant(j)]
+            # Filter to relevant US entry-level jobs.  Workday list responses
+            # carry no description, so _is_citizenship_restricted is a no-op
+            # here — defense contractors on Workday (e.g. Leidos) are handled
+            # by the company-level blocklist instead.
+            jobs = [
+                j
+                for j in all_postings
+                if self.is_job_relevant(j) and not self._is_citizenship_restricted(j)
+            ]
 
             if jobs:
                 # Save to filesystem

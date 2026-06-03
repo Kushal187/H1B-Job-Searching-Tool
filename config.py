@@ -97,6 +97,54 @@ SCRAPE_RETRY_BACKOFF = 1.0  # base seconds for exponential backoff (1s, 2s, 4s)
 SCRAPE_CIRCUIT_BREAKER_THRESHOLD = 5  # consecutive failures per ATS to trip breaker
 SCRAPE_CIRCUIT_BREAKER_COOLDOWN = 60  # seconds to skip requests when breaker is open
 
+# ─── Company Exclusions ──────────────────────────────────────────────────────
+# Defense / intelligence / government-services contractors whose roles almost
+# always require U.S. citizenship or an active security clearance — useless for
+# H1B / visa candidates.  Companies whose (lowercased) name contains any of
+# these word-boundary keywords are skipped entirely at scrape time (saving
+# egress) and their existing listings are deactivated.  Matching is done on the
+# original spaced name, so e.g. "saic" will NOT match "Mosaic".
+#
+# Edit this list to taste; add or remove companies as needed.  Note: the
+# job-level citizenship/clearance keyword filter (scrapers/citizenship_filter.py)
+# still catches individual restricted roles at companies NOT on this list.
+EXCLUDED_COMPANY_KEYWORDS = [
+    # Named by the user
+    "anduril",
+    "leidos",
+    # Defense / aerospace primes
+    "lockheed",                      # Lockheed Martin
+    "northrop",                      # Northrop Grumman
+    "raytheon",
+    "rtx",                           # RTX Corp (Raytheon parent)
+    "general dynamics",
+    "general atomics",
+    "l3harris",
+    "l3 harris",
+    "bae systems",
+    "huntington ingalls",
+    "sierra nevada corporation",
+    # Intelligence / government IT & services contractors
+    "booz allen",
+    "saic",
+    "science applications international",
+    "caci",
+    "mantech",
+    "man tech",
+    "peraton",
+    "kbr",
+    "mitre",
+    "battelle",
+    "draper laboratory",
+    "parsons corporation",
+    # Federally funded R&D centers / national labs (citizenship required)
+    "sandia",
+    "los alamos",
+    "lawrence livermore",
+    "lincoln laboratory",
+    "applied physics laboratory",
+]
+
 # ─── Matching Configuration ──────────────────────────────────────────────────
 
 FUZZY_MATCH_THRESHOLD = 85  # minimum score for fuzzy name match

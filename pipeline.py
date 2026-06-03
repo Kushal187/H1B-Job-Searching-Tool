@@ -329,6 +329,44 @@ def get_companies_to_scrape(
     return []
 
 
+def _filter_excluded_companies(
+    companies: list[dict],
+) -> tuple[list[dict], list[int]]:
+    """Split *companies* into (kept, excluded_ids) using the company blocklist.
+
+    Excluded companies are defense / intelligence / government-services
+    contractors (config.EXCLUDED_COMPANY_KEYWORDS) whose roles almost always
+    require U.S. citizenship or a security clearance.
+    """
+    from scrapers.citizenship_filter import is_excluded_company
+
+    kept: list[dict] = []
+    excluded_ids: list[int] = []
+    for c in companies:
+        if is_excluded_company(c.get("company_name", "")):
+            if c.get("id"):
+                excluded_ids.append(c["id"])
+        else:
+            kept.append(c)
+    return kept, excluded_ids
+
+
+def _deactivate_company_jobs(company_ids: list[int], chunk_size: int = 400):
+    """Mark all active job listings for *company_ids* as inactive.
+
+    Retires jobs from companies added to the exclusion blocklist after their
+    listings had already been scraped, so they drop out of results.
+    """
+    for i in range(0, len(company_ids), chunk_size):
+        chunk = company_ids[i : i + chunk_size]
+        placeholders = ",".join(["?"] * len(chunk))
+        database.execute(
+            f"UPDATE job_listings SET is_active = 0 "
+            f"WHERE is_active = 1 AND company_id IN ({placeholders})",
+            tuple(chunk),
+        )
+
+
 def run_scrape(
     mode: str = "monitor",
     workers: int = 1,
@@ -386,6 +424,14 @@ def run_scrape(
             )
             companies.extend(extra)
 
+    # ── Drop citizenship-restricted / defense companies ──────────────────
+    # These (e.g. Anduril, Leidos) almost always require U.S. citizenship or a
+    # security clearance, so skip scraping them (saves egress) and deactivate
+    # any of their already-scraped listings so they fall out of results.
+    companies, excluded_ids = _filter_excluded_companies(companies)
+    if excluded_ids:
+        _deactivate_company_jobs(excluded_ids)
+
     total = len(companies)
 
     stats = {
@@ -397,6 +443,7 @@ def run_scrape(
         "not_found": 0,
         "total_jobs": 0,
         "new_jobs": 0,
+        "excluded_companies": len(excluded_ids),
     }
 
     if on_start:
@@ -594,6 +641,8 @@ def _print_summary(stats: dict, total: int, elapsed: float):
     print(f"Scraping complete in {minutes}m {seconds}s")
     print(f"{'=' * 60}")
     print(f"  Companies scraped:   {total:,}")
+    if stats.get("excluded_companies"):
+        print(f"  Excluded (citizenship): {stats['excluded_companies']:,}")
     print(f"  Greenhouse matches:  {stats['greenhouse']:,}")
     print(f"  Lever matches:       {stats['lever']:,}")
     print(f"  Ashby matches:       {stats['ashby']:,}")
