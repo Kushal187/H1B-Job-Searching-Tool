@@ -45,6 +45,19 @@ ROLE_PATTERNS: list[re.Pattern] = [
     re.compile(r"applied\s+scientist", re.IGNORECASE),         # Applied Scientist
     re.compile(r"research\s+engineer", re.IGNORECASE),
     re.compile(r"research\s+scientist", re.IGNORECASE),
+    re.compile(r"deep\s+learning\s+engineer", re.IGNORECASE),
+    re.compile(r"computer\s+vision\s+engineer", re.IGNORECASE),
+    re.compile(r"natural\s+language\s+processing\s+engineer", re.IGNORECASE),
+    re.compile(r"\bnlp\s+engineer", re.IGNORECASE),           # NLP Engineer
+    re.compile(r"\bml\s*ops\s+engineer", re.IGNORECASE),      # MLOps / ML Ops Engineer
+    re.compile(r"\bml\s+(?:platform|infrastructure)\s+engineer", re.IGNORECASE),  # ML Platform / Infra Engineer
+    re.compile(r"\bllm\s+engineer", re.IGNORECASE),           # LLM Engineer
+    re.compile(r"machine\s+learning\s+scientist", re.IGNORECASE),  # Machine Learning Scientist
+    re.compile(r"\bml\s+scientist", re.IGNORECASE),           # ML Scientist
+    re.compile(r"machine\s+learning\s+researcher", re.IGNORECASE),  # Machine Learning Researcher
+    re.compile(r"\bai\s+scientist", re.IGNORECASE),           # AI Scientist
+    re.compile(r"\bai\s+researcher", re.IGNORECASE),          # AI Researcher
+
 
     # ── Forward Deployed ──────────────────────────────────────────────────
     re.compile(r"forward\s+deploy", re.IGNORECASE),            # forward deployed / forward deployment
