@@ -83,9 +83,15 @@ ROLE_PATTERNS: list[re.Pattern] = [
     re.compile(r"network\s+engineer", re.IGNORECASE),
     re.compile(r"reliability\s+engineer", re.IGNORECASE),
 
-    # ── Security ──────────────────────────────────────────────────────────
+    # ── Security / Risk / Audit ───────────────────────────────────────────
     re.compile(r"security\s+engineer", re.IGNORECASE),
     re.compile(r"cybersecurity\s+engineer", re.IGNORECASE),
+    re.compile(r"security\s+analyst", re.IGNORECASE),
+    re.compile(r"(?:cyber\s?security|information\s+security|infosec)\s+(?:analyst|consultant|engineer)", re.IGNORECASE),
+    re.compile(r"internal\s+audit(?:or)?", re.IGNORECASE),
+    re.compile(r"\bit\s+audit(?:or)?", re.IGNORECASE),
+    re.compile(r"risk\s+(?:management|analyst)", re.IGNORECASE),
+    re.compile(r"grc\s+analyst", re.IGNORECASE),
 
     # ── Embedded / Hardware / Robotics ────────────────────────────────────
     re.compile(r"embedded\s+engineer", re.IGNORECASE),
